@@ -42,15 +42,19 @@ class CitroenOAuth(
         val basic = Base64.getEncoder().encodeToString(
             (config.clientId + ":" + config.clientSecret).toByteArray(Charsets.UTF_8)
         )
-        val body = FormBody.Builder()
-            .add("redirect_uri", config.redirectUri)
-            .add("grant_type", "authorization_code")
-            .add("code", code)
+        // Match the current community implementation exactly: token parameters
+        // are query parameters on a body-less POST, not form fields in the body.
+        val tokenUrl = Uri.parse(config.oauthBaseUrl + "/access_token").buildUpon()
+            .appendQueryParameter("redirect_uri", config.redirectUri)
+            .appendQueryParameter("grant_type", "authorization_code")
+            .appendQueryParameter("code", code)
             .build()
+            .toString()
         val request = Request.Builder()
-            .url(config.oauthBaseUrl + "/access_token")
+            .url(tokenUrl)
+            .header("Content-Type", "application/x-www-form-urlencoded")
             .header("Authorization", "Basic " + basic)
-            .post(body)
+            .post(okhttp3.RequestBody.create(null, ByteArray(0)))
             .build()
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
