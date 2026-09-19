@@ -10,14 +10,19 @@ import com.ec3control.ui.Ec3App
 import com.ec3control.ui.theme.Ec3Theme
 
 class MainActivity : ComponentActivity() {
-    private val oauthResult = mutableStateOf<OAuthCallbackResult?>(null)
+    private val oauthCode = mutableStateOf<String?>(null)
+    private val oauthError = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         consumeOAuthCallback(intent?.data)
         setContent {
             Ec3Theme {
-                Ec3App()
+                Ec3App(
+                    oauthCode = oauthCode.value,
+                    oauthError = oauthError.value,
+                    clearOAuthResult = { oauthCode.value = null; oauthError.value = null }
+                )
             }
         }
     }
@@ -29,21 +34,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun consumeOAuthCallback(uri: Uri?) {
-        if (uri?.scheme != "ec3control" || uri.host != "oauth") return
-
-        val error = uri.getQueryParameter("error")
-        val code = uri.getQueryParameter("code")
-        oauthResult.value = when {
-            !error.isNullOrBlank() -> OAuthCallbackResult.Error(error)
-            !code.isNullOrBlank() -> OAuthCallbackResult.AuthorizationCodeReceived
-            else -> OAuthCallbackResult.Error("Callback OAuth sin code ni error")
+        if (uri == null) return
+        val accepted = (uri.scheme == "ec3control" && uri.host == "oauth") ||
+            (uri.scheme == "mymacsdk" && uri.host == "oauth2redirect" && uri.path?.startsWith("/es") == true)
+        if (!accepted) return
+        oauthError.value = uri.getQueryParameter("error")
+        oauthCode.value = uri.getQueryParameter("code")
+        if (oauthCode.value.isNullOrBlank() && oauthError.value.isNullOrBlank()) {
+            oauthError.value = "Citroën no devolvió código OAuth"
         }
-
-        // Deliberately do not log or persist the authorization code.
+        // Never log or persist authorization codes.
     }
-}
-
-sealed interface OAuthCallbackResult {
-    data object AuthorizationCodeReceived : OAuthCallbackResult
-    data class Error(val reason: String) : OAuthCallbackResult
 }
