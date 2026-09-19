@@ -98,8 +98,8 @@ class SafeStellantisCommunityDiagnostic(
                                         vehicleStatus = StellantisDiagnosticState.Check.PENDING,
                                         message = "VIN confirmado. /user=" + userProbe.first +
                                             "; /user/vehicles=40400. " +
-                                            (userProbe.second?.let { "Detalle /user: $it" }
-                                                ?: "La asociación no expone el vehicle_id.")
+                                            "Diagnóstico: OAuth y asociación funcionan, pero Connected Car no publica " +
+                                            "este vehículo para este cliente. No se intentarán rutas no documentadas."
                                     )
                                 }
                             }
