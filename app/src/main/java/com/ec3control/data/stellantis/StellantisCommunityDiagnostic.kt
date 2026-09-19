@@ -74,11 +74,16 @@ class SafeStellantisCommunityDiagnostic(
                             val associationRaw = associationResponse.body?.string().orEmpty()
                             if (associationResponse.isSuccessful) {
                                 val associations = Json.parseToJsonElement(associationRaw).jsonArray
-                                val associatedVehicle = associations.firstOrNull()?.jsonObject
+                                val association = associations.firstOrNull()?.jsonObject
+                                val associatedVehicle = association
                                     ?.get("vehicle")?.jsonPrimitive?.contentOrNull
                                 if (!associatedVehicle.isNullOrBlank()) {
+                                    val kind = if (
+                                        associatedVehicle.length == 17 &&
+                                        associatedVehicle.all { it.isLetterOrDigit() }
+                                    ) "VIN" else "ID"
                                     return@withContext readVehicleStatus(
-                                        a, associatedVehicle, headers
+                                        a, associatedVehicle, headers, kind
                                     )
                                 }
                             }
@@ -167,7 +172,8 @@ class SafeStellantisCommunityDiagnostic(
     private fun readVehicleStatus(
         auth: StellantisRuntimeAuth,
         vehicleId: String,
-        headers: Request.Builder.() -> Unit
+        headers: Request.Builder.() -> Unit,
+        identifierKind: String = "ID"
     ): StellantisDiagnosticState {
         val statusUrl = okhttp3.HttpUrl.Builder()
             .scheme("https")
@@ -179,7 +185,20 @@ class SafeStellantisCommunityDiagnostic(
         http.newCall(Request.Builder().url(statusUrl).apply(headers).get().build()).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                return httpError(response.code, vehicleId, safeErrorDetail(raw))
+                return StellantisDiagnosticState(
+                    authentication = StellantisDiagnosticState.Check.OK,
+                    vehicleDiscovery = StellantisDiagnosticState.Check.OK,
+                    vehicleStatus = StellantisDiagnosticState.Check.PENDING,
+                    vehicleId = vehicleId,
+                    message = buildString {
+                        append("Status HTTP ")
+                        append(response.code)
+                        append(". Identificador de asociación: ")
+                        append(identifierKind)
+                        append(" (valor oculto)")
+                        safeErrorDetail(raw)?.let { append(" | "); append(it) }
+                    }
+                )
             }
             val status = Json.parseToJsonElement(raw).jsonObject
             val energy = (status["energy"] ?: status["energies"])?.jsonArray?.firstOrNull()?.jsonObject
