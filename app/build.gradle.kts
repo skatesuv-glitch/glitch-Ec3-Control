@@ -6,12 +6,14 @@ plugins {
 android {
     namespace = "com.ec3control"
     compileSdk = 35
-    defaultConfig { applicationId = "com.ec3control"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "0.1.0" }
+    defaultConfig { applicationId = "com.ec3control"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "0.1.0"
+        buildConfigField("String", "CITROEN_CLIENT_ID", "\\\"${project.findProperty("CITROEN_CLIENT_ID") ?: ""}\\\"")
+        buildConfigField("String", "CITROEN_CLIENT_SECRET", "\\\"${project.findProperty("CITROEN_CLIENT_SECRET") ?: ""}\\\"") }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
 }
 kotlin {
     jvmToolchain(17)
