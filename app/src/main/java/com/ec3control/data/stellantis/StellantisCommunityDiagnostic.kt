@@ -46,27 +46,56 @@ class SafeStellantisCommunityDiagnostic(
                 header("Accept", "application/hal+json")
             }
             val vehiclesUrl = a.apiBaseUrl.trimEnd('/') + "/v4/user/vehicles"
-            val vehicleResponse = http.newCall(Request.Builder().url(vehiclesUrl).apply(headers).get().build()).execute()
+            val vehicleResponse = http.newCall(
+                Request.Builder().url(vehiclesUrl).apply(headers).get().build()
+            ).execute()
+
             vehicleResponse.use { response ->
-                if (!response.isSuccessful) return@withContext httpError(response.code, null, safeErrorDetail(response.body?.string().orEmpty()))
+                if (!response.isSuccessful) {
+                    return@withContext httpError(
+                        response.code,
+                        detail = safeErrorDetail(response.body?.string().orEmpty())
+                    )
+                }
+
                 val root = Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject
-                val id = root["vehicles"]?.jsonArray?.firstOrNull()?.jsonObject?.get("id")?.jsonPrimitive?.content
-                if (id.isNullOrBlank()) return@withContext StellantisDiagnosticState(
-                    authentication = StellantisDiagnosticState.Check.OK,
-                    vehicleDiscovery = StellantisDiagnosticState.Check.ERROR,
-                    message = "OAuth válido, pero no se encontró ningún vehículo."
-                )
+                val id = root["vehicles"]?.jsonArray?.firstOrNull()?.jsonObject
+                    ?.get("id")?.jsonPrimitive?.content
+
+                if (id.isNullOrBlank()) {
+                    return@withContext StellantisDiagnosticState(
+                        authentication = StellantisDiagnosticState.Check.OK,
+                        vehicleDiscovery = StellantisDiagnosticState.Check.ERROR,
+                        message = "OAuth válido, pero no se encontró ningún vehículo."
+                    )
+                }
 
                 val statusUrl = "$vehiclesUrl/$id/status"
-                http.newCall(Request.Builder().url(statusUrl).apply(headers).get().build()).execute().use { statusResponse ->
-                    if (!statusResponse.isSuccessful) return@withContext httpError(statusResponse.code, id, safeErrorDetail(statusResponse.body?.string().orEmpty()))
-                    val status = Json.parseToJsonElement(statusResponse.body?.string().orEmpty()).jsonObject
-                    val energy = (status["energy"] ?: status["energies"])?.jsonArray?.firstOrNull()?.jsonObject
-                    val battery = energy?.get("level")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()?.toInt()
-                    val range = energy?.get("autonomy")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()?.toInt()
-                    val chargeStatus = energy?.get("charging")?.jsonObject?.get("status")?.jsonPrimitive?.contentOrNull
+                http.newCall(
+                    Request.Builder().url(statusUrl).apply(headers).get().build()
+                ).execute().use { statusResponse ->
+                    if (!statusResponse.isSuccessful) {
+                        return@withContext httpError(
+                            statusResponse.code,
+                            id,
+                            safeErrorDetail(statusResponse.body?.string().orEmpty())
+                        )
+                    }
+
+                    val status = Json.parseToJsonElement(
+                        statusResponse.body?.string().orEmpty()
+                    ).jsonObject
+                    val energy = (status["energy"] ?: status["energies"])
+                        ?.jsonArray?.firstOrNull()?.jsonObject
+                    val battery = energy?.get("level")?.jsonPrimitive
+                        ?.contentOrNull?.toDoubleOrNull()?.toInt()
+                    val range = energy?.get("autonomy")?.jsonPrimitive
+                        ?.contentOrNull?.toDoubleOrNull()?.toInt()
+                    val chargeStatus = energy?.get("charging")?.jsonObject
+                        ?.get("status")?.jsonPrimitive?.contentOrNull
                         ?: energy?.get("extension")?.jsonObject?.get("electric")?.jsonObject
                             ?.get("charging")?.jsonObject?.get("status")?.jsonPrimitive?.contentOrNull
+
                     StellantisDiagnosticState(
                         authentication = StellantisDiagnosticState.Check.OK,
                         vehicleDiscovery = StellantisDiagnosticState.Check.OK,
@@ -87,10 +116,41 @@ class SafeStellantisCommunityDiagnostic(
         }
     }
 
-    private fun safeErrorDetail(raw: String): String? {\n        if (raw.isBlank()) return null\n        return try {\n            val obj = Json.parseToJsonElement(raw).jsonObject\n            listOf("error", "error_description", "httpMessage", "moreInformation", "message", "code")\n                .mapNotNull { key -> obj[key]?.jsonPrimitive?.contentOrNull?.let { "$key=$it" } }\n                .joinToString(" | ").takeIf { it.isNotBlank() }?.take(300)\n        } catch (_: Exception) { null }\n    }\n\n    private fun httpError(code: Int, vehicleId: String? = null, detail: String? = null) = StellantisDiagnosticState(
-        authentication = if (code == 401 || code == 403) StellantisDiagnosticState.Check.ERROR else StellantisDiagnosticState.Check.OK,
-        vehicleDiscovery = if (vehicleId != null) StellantisDiagnosticState.Check.OK else StellantisDiagnosticState.Check.PENDING,
+    private fun safeErrorDetail(raw: String): String? {
+        if (raw.isBlank()) return null
+        return try {
+            val obj = Json.parseToJsonElement(raw).jsonObject
+            listOf(
+                "error", "error_description", "httpMessage",
+                "moreInformation", "message", "code"
+            ).mapNotNull { key ->
+                obj[key]?.jsonPrimitive?.contentOrNull?.let { value -> "$key=$value" }
+            }.joinToString(" | ").takeIf { it.isNotBlank() }?.take(300)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun httpError(
+        code: Int,
+        vehicleId: String? = null,
+        detail: String? = null
+    ) = StellantisDiagnosticState(
+        authentication = if (code == 401 || code == 403) {
+            StellantisDiagnosticState.Check.ERROR
+        } else {
+            StellantisDiagnosticState.Check.OK
+        },
+        vehicleDiscovery = if (vehicleId != null) {
+            StellantisDiagnosticState.Check.OK
+        } else {
+            StellantisDiagnosticState.Check.PENDING
+        },
         vehicleId = vehicleId,
-        message = buildString {\n            append("Stellantis respondió HTTP $code")\n            if (!detail.isNullOrBlank()) append(": $detail")\n            append(".")\n        }
+        message = buildString {
+            append("Stellantis respondió HTTP $code")
+            if (!detail.isNullOrBlank()) append(": $detail")
+            append(".")
+        }
     )
 }
