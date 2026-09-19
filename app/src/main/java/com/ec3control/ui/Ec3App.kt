@@ -95,6 +95,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var smsBusy by remember{mutableStateOf(false)}
  var smsCode by remember{mutableStateOf("")}
  var localPin by remember{mutableStateOf("")}
+ var localPinConfirm by remember{mutableStateOf("")}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
  val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
@@ -121,7 +122,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Text("BUILD OTP-2026.09.19-B",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Text("BUILD OTP-2026.09.19-C",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
@@ -155,18 +156,27 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
     )
     OutlinedTextField(
      value=localPin,
-     onValueChange={localPin=it.filter(Char::isDigit).take(12)},
-     label={Text("PIN RemoteServices")},
+     onValueChange={localPin=it.filter(Char::isDigit).take(4)},
+     label={Text("Crear PIN de 4 cifras")},
      singleLine=true,
      visualTransformation=PasswordVisualTransformation(),
      modifier=Modifier.fillMaxWidth()
     )
+    OutlinedTextField(
+     value=localPinConfirm,
+     onValueChange={localPinConfirm=it.filter(Char::isDigit).take(4)},
+     label={Text("Confirmar PIN de 4 cifras")},
+     singleLine=true,
+     visualTransformation=PasswordVisualTransformation(),
+     modifier=Modifier.fillMaxWidth()
+    )
+    val otpFormReady=smsCode.isNotBlank() && localPin.length==4 && localPinConfirm==localPin
     Button(
      enabled=false,
      onClick={},
      modifier=Modifier.fillMaxWidth()
-    ){Text("Activar OTP · siguiente fase")}
-    Text("SMS y PIN permanecen solo en memoria. La activación criptográfica todavía está bloqueada en esta compilación hasta portar y verificar el protocolo completo.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+    ){Text(if(otpFormReady)"Activar OTP · preparado" else "Activar OTP · completa los datos")}
+    Text("El código SMS y el PIN nuevo permanecen solo en memoria. Los PIN deben coincidir. La activación criptográfica sigue bloqueada hasta verificar el protocolo completo.",color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
