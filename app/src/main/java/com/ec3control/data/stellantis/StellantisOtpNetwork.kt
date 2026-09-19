@@ -11,7 +11,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 data class OtpNetworkResult(val ok:Boolean,val message:String)
 
-class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
+class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){\n private var activeOtp:StellantisOtpActivation?=null
  suspend fun activate(accessToken:String,smsCode:String,pin:String):OtpNetworkResult=withContext(Dispatchers.IO){
   require(accessToken.length>=16){"OAuth token unavailable"}
   require(smsCode.isNotBlank()){"SMS code required"}
