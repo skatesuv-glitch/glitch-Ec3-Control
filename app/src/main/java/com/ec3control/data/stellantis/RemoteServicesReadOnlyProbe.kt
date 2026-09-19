@@ -72,7 +72,7 @@ class RemoteServicesReadOnlyProbe(
     private fun safeDetail(raw: String): String? = try {
         val obj = Json.parseToJsonElement(raw).jsonObject
         listOf("error", "error_description", "httpMessage", "moreInformation", "message", "code")
-            .mapNotNull { key -> obj[key]?.jsonPrimitive?.contentOrNull?.let { "$key=$it" } }
+            .mapNotNull { key -> obj[key]?.jsonPrimitive?.content?.let { "$key=$it" } }
             .joinToString(" | ")
             .takeIf { it.isNotBlank() }
             ?.take(300)
