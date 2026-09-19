@@ -48,7 +48,7 @@ class SafeStellantisCommunityDiagnostic(
             val vehiclesUrl = a.apiBaseUrl.trimEnd('/') + "/v4/user/vehicles"
             val vehicleResponse = http.newCall(Request.Builder().url(vehiclesUrl).apply(headers).get().build()).execute()
             vehicleResponse.use { response ->
-                if (!response.isSuccessful) return@withContext httpError(response.code)
+                if (!response.isSuccessful) return@withContext httpError(response.code, null, safeErrorDetail(response.body?.string().orEmpty()))
                 val root = Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject
                 val id = root["vehicles"]?.jsonArray?.firstOrNull()?.jsonObject?.get("id")?.jsonPrimitive?.content
                 if (id.isNullOrBlank()) return@withContext StellantisDiagnosticState(
@@ -59,7 +59,7 @@ class SafeStellantisCommunityDiagnostic(
 
                 val statusUrl = "$vehiclesUrl/$id/status"
                 http.newCall(Request.Builder().url(statusUrl).apply(headers).get().build()).execute().use { statusResponse ->
-                    if (!statusResponse.isSuccessful) return@withContext httpError(statusResponse.code, id)
+                    if (!statusResponse.isSuccessful) return@withContext httpError(statusResponse.code, id, safeErrorDetail(statusResponse.body?.string().orEmpty()))
                     val status = Json.parseToJsonElement(statusResponse.body?.string().orEmpty()).jsonObject
                     val energy = (status["energy"] ?: status["energies"])?.jsonArray?.firstOrNull()?.jsonObject
                     val battery = energy?.get("level")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()?.toInt()
@@ -87,10 +87,10 @@ class SafeStellantisCommunityDiagnostic(
         }
     }
 
-    private fun httpError(code: Int, vehicleId: String? = null) = StellantisDiagnosticState(
+    private fun safeErrorDetail(raw: String): String? {\n        if (raw.isBlank()) return null\n        return try {\n            val obj = Json.parseToJsonElement(raw).jsonObject\n            listOf("error", "error_description", "httpMessage", "moreInformation", "message", "code")\n                .mapNotNull { key -> obj[key]?.jsonPrimitive?.contentOrNull?.let { "$key=$it" } }\n                .joinToString(" | ").takeIf { it.isNotBlank() }?.take(300)\n        } catch (_: Exception) { null }\n    }\n\n    private fun httpError(code: Int, vehicleId: String? = null, detail: String? = null) = StellantisDiagnosticState(
         authentication = if (code == 401 || code == 403) StellantisDiagnosticState.Check.ERROR else StellantisDiagnosticState.Check.OK,
         vehicleDiscovery = if (vehicleId != null) StellantisDiagnosticState.Check.OK else StellantisDiagnosticState.Check.PENDING,
         vehicleId = vehicleId,
-        message = "Stellantis respondió HTTP $code."
+        message = buildString {\n            append("Stellantis respondió HTTP $code")\n            if (!detail.isNullOrBlank()) append(": $detail")\n            append(".")\n        }
     )
 }
