@@ -22,7 +22,7 @@ jobs:
       - name: Run tests and build debug APK
         shell: bash
         run: |
-          if [ "${GITHUB_REF_NAME}" = "experiment/stellantis-community" ]; then
+          if [ "${GITHUB_REF}" = "refs/heads/experiment/stellantis-community" ] || [ "${GITHUB_HEAD_REF}" = "experiment/stellantis-community" ]; then
             CONFIG_URL="https://raw.githubusercontent.com/andreadegiovine/homeassistant-stellantis-vehicles/develop/custom_components/stellantis_vehicles/configs.json"
             curl -fsSL "$CONFIG_URL" -o /tmp/stellantis-configs.json
             CLIENT_ID="$(python3 -c 'import json; d=json.load(open("/tmp/stellantis-configs.json")); print(d["MyCitroen"]["configs"]["ES"]["client_id"])')"
