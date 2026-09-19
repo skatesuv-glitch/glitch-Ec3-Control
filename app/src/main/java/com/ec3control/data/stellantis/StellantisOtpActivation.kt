@@ -24,6 +24,7 @@ internal class StellantisOtpActivation(
     private var kfact=""
     private var kiw=""
     private var pinmode=""
+    private var challenge=""
 
     init {
         // Exact initial IWData fields consumed by load.py/load1xx from DEFAULT_TOKEN.
@@ -72,6 +73,7 @@ internal class StellantisOtpActivation(
     }
 
     fun synchronize(xml:Map<String,String>,pin:String):OtpActivationResult{
+        xml["challenge"]?.let{challenge=it}
         if(xml["err"]!="OK") return OtpActivationResult(false,"OTP activation rejected")
         val key=SecretKeySpec(generateKma(pin).hexToBytes(),"AES")
         val aes=Cipher.getInstance("AES/ECB/NoPadding").apply{init(Cipher.DECRYPT_MODE,key)}
@@ -87,7 +89,7 @@ internal class StellantisOtpActivation(
         val count=xml["ms_n"]?.toIntOrNull() ?: 0
         if(count==0) return null
         require(count==1){"Unsupported MS sync count"}
-        val challenge=requireNotNull(xml["challenge"])
+        val challenge=requireNotNull(xml["challenge"]).also{this.challenge=it}
         val serverModulus=StellantisOaep.decodePublicOperation(requireNotNull(xml["ms_key"]).hexToBytes(),BigInteger(kfact,16))
         val randomKey=ByteArray(16).also(random::nextBytes)
         val encodedKey=StellantisOaep.encode(randomKey,BigInteger(1,serverModulus),random=random).toHex()
@@ -96,8 +98,8 @@ internal class StellantisOtpActivation(
         val secId=requireNotNull(xml["s_id"])
         val iw=iwK0
         val r=mapOf(
-            "R0" to sha256Hex((challenge+";"+iw+";"+serial()).toByteArray()),
-            "R1" to sha256Hex((challenge+";"+iw+";"+iwK1).toByteArray()),
+            "R0" to sha256Hex((currentChallenge+";"+iw+";"+serial()).toByteArray()),
+            "R1" to sha256Hex((currentChallenge+";"+iw+";"+iwK1).toByteArray()),
             "R2" to sha256Hex((challenge+";"+iw+";"+pin).toByteArray())
         )
         return OtpMsRequest(
@@ -133,7 +135,7 @@ internal class StellantisOtpActivation(
         return mapOf(
             "R0" to sha256Hex((challenge+";"+iw+";"+serial()).toByteArray()),
             "R1" to sha256Hex((challenge+";"+iw+";"+iwK1).toByteArray()),
-            "R2" to sha256Hex((challenge+";"+iw+";").toByteArray())
+            "R2" to sha256Hex((currentChallenge+";"+iw+";").toByteArray())
         )
     }
 }
