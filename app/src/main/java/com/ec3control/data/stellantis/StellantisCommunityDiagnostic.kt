@@ -52,6 +52,7 @@ class SafeStellantisCommunityDiagnostic(
                 .addPathSegments("connectedcar/v4/user/vehicles")
                 .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
                 .addQueryParameter("locale", "es-ES")
+                .addQueryParameter("extension", "onboardCapabilities")
                 .build()
             val vehicleResponse = http.newCall(
                 Request.Builder().url(vehiclesRequestUrl).apply(headers).get().build()
@@ -78,13 +79,35 @@ class SafeStellantisCommunityDiagnostic(
                                 val associatedVehicle = association
                                     ?.get("vehicle")?.jsonPrimitive?.contentOrNull
                                 if (!associatedVehicle.isNullOrBlank()) {
-                                    val kind = if (
-                                        associatedVehicle.length == 17 &&
-                                        associatedVehicle.all { it.isLetterOrDigit() }
-                                    ) "VIN" else "ID"
-                                    return@withContext readVehicleStatus(
-                                        a, associatedVehicle, headers, kind
-                                    )
+                                    val vinLookupUrl = okhttp3.HttpUrl.Builder()
+                                        .scheme("https")
+                                        .host("api.groupe-psa.com")
+                                        .addPathSegments("connectedcar/v4/vehicle/$associatedVehicle")
+                                        .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                                        .addQueryParameter("extension", "onboardCapabilities")
+                                        .build()
+                                    http.newCall(
+                                        Request.Builder().url(vinLookupUrl).apply(headers).get().build()
+                                    ).execute().use { vinResponse ->
+                                        val vinRaw = vinResponse.body?.string().orEmpty()
+                                        if (vinResponse.isSuccessful) {
+                                            val vinRoot = Json.parseToJsonElement(vinRaw).jsonObject
+                                            val resolvedId = vinRoot["id"]?.jsonPrimitive?.contentOrNull
+                                            if (!resolvedId.isNullOrBlank()) {
+                                                return@withContext readVehicleStatus(
+                                                    a, resolvedId, headers, "ID resuelto desde VIN"
+                                                )
+                                            }
+                                        }
+                                        return@withContext StellantisDiagnosticState(
+                                            authentication = StellantisDiagnosticState.Check.OK,
+                                            vehicleDiscovery = StellantisDiagnosticState.Check.OK,
+                                            vehicleStatus = StellantisDiagnosticState.Check.PENDING,
+                                            message = "VIN confirmado. Resolución a vehicle_id: HTTP " +
+                                                vinResponse.code + ". " +
+                                                (safeErrorDetail(vinRaw) ?: "Sin identificador utilizable.")
+                                        )
+                                    }
                                 }
                             }
                             return@withContext httpError(
