@@ -93,6 +93,8 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var remoteAccessToken by remember{mutableStateOf<String?>(null)}
  var smsResult by remember{mutableStateOf<RemoteServicesSmsResult?>(null)}
  var smsBusy by remember{mutableStateOf(false)}
+ var smsCode by remember{mutableStateOf("")}
+ var localPin by remember{mutableStateOf("")}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
  val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
@@ -140,6 +142,31 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
     Text("El SMS se solicita solo al pulsar este botón. No escribas aquí el código ni tu PIN.",color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    smsResult?.let{ Text(it.message,color=if(it.accepted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) }
+   if(smsResult?.accepted==true){
+    Text("Activación OTP · solo en este teléfono",style=MaterialTheme.typography.titleMedium)
+    OutlinedTextField(
+     value=smsCode,
+     onValueChange={smsCode=it.filter(Char::isDigit).take(12)},
+     label={Text("Código recibido por SMS")},
+     singleLine=true,
+     visualTransformation=PasswordVisualTransformation(),
+     modifier=Modifier.fillMaxWidth()
+    )
+    OutlinedTextField(
+     value=localPin,
+     onValueChange={localPin=it.filter(Char::isDigit).take(12)},
+     label={Text("PIN RemoteServices")},
+     singleLine=true,
+     visualTransformation=PasswordVisualTransformation(),
+     modifier=Modifier.fillMaxWidth()
+    )
+    Button(
+     enabled=false,
+     onClick={},
+     modifier=Modifier.fillMaxWidth()
+    ){Text("Activar OTP · siguiente fase")}
+    Text("SMS y PIN permanecen solo en memoria. La activación criptográfica todavía está bloqueada en esta compilación hasta portar y verificar el protocolo completo.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   }
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
    if(oauthError!=null) Text("OAuth: $oauthError",color=MaterialTheme.colorScheme.error)
