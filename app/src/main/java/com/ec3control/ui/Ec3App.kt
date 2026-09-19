@@ -1,4 +1,6 @@
 package com.ec3control.ui
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ec3control.core.model.VehicleSnapshot
 import com.ec3control.data.demo.DemoVehicleGateway
+import com.ec3control.data.stellantis.*
+import androidx.compose.ui.platform.LocalContext
 import com.ec3control.core.vehicle.VehicleGateway
 import kotlinx.coroutines.launch
 import java.text.DateFormat
@@ -16,7 +20,7 @@ import java.util.Date
 
 private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHARGE("Carga"),CLIMATE("Clima"),VEHICLE("Vehículo"),DIAGNOSTIC("Prueba")}
 
-@Composable fun Ec3App(gateway: VehicleGateway = remember { DemoVehicleGateway() }){
+@Composable fun Ec3App(gateway: VehicleGateway = remember { DemoVehicleGateway() }, oauthCode:String?=null, oauthError:String?=null, clearOAuthResult:()->Unit={}){
  var tab by remember{mutableStateOf(Tab.HOME)}
  var snapshot by remember{mutableStateOf<VehicleSnapshot?>(null)}
  LaunchedEffect(Unit){snapshot=gateway.getVehicle()}
@@ -28,7 +32,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Tab.CHARGE->ChargeScreen(gateway,snapshot,{snapshot=it},mod)
    Tab.CLIMATE->ClimateScreen(gateway,snapshot,{snapshot=it},mod)
    Tab.VEHICLE->VehicleScreen(snapshot,mod)
-   Tab.DIAGNOSTIC->DiagnosticScreen(mod)
+   Tab.DIAGNOSTIC->DiagnosticScreen(oauthCode,oauthError,clearOAuthResult,mod)
   }
  }
 }
@@ -76,15 +80,51 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
 @Composable private fun Metric(label:String,value:String){Column{Text(label,style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);Text(value,style=MaterialTheme.typography.titleMedium)}}
 
 
-@Composable private fun DiagnosticScreen(modifier:Modifier=Modifier){
+@Composable private fun DiagnosticScreen(oauthCode:String?,oauthError:String?,clearOAuthResult:()->Unit,modifier:Modifier=Modifier){
+ val context=LocalContext.current
+ val scope=rememberCoroutineScope()
+ var state by remember{mutableStateOf(StellantisDiagnosticState())}
+ var busy by remember{mutableStateOf(false)}
+ val clientId=BuildConfig.CITROEN_CLIENT_ID
+ val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
+ val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
+ val oauth=remember(clientId,clientSecret){ if(configured) CitroenOAuth(CitroenOAuthConfig(clientId,clientSecret)) else null }
+
+ LaunchedEffect(oauthCode){
+  val code=oauthCode ?: return@LaunchedEffect
+  val provider=oauth ?: return@LaunchedEffect
+  busy=true
+  state=try{
+   val tokens=provider.exchangeCode(code)
+   SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+  }catch(e:Exception){
+   StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth/conexión: "+(e.message?:"error"))
+  }
+  busy=false
+  clearOAuthResult()
+ }
+
  Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-   Text("Plan B · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Metric("OAuth","Pendiente")
-   Metric("Vehículo","Pendiente")
-   Metric("Estado / batería","Pendiente")
-   Text("Esta pantalla experimental no envía órdenes al coche. La app DEMO sigue funcionando por separado.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
+   Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
+   Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
+   Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
+   state.batteryPercent?.let{Metric("Batería real","$it %")}
+   state.rangeKm?.let{Metric("Autonomía","$it km")}
+   if(oauthError!=null) Text("OAuth: $oauthError",color=MaterialTheme.colorScheme.error)
+   Text(state.message,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Button(
+    enabled=configured&&!busy,
+    onClick={
+     val url=oauth?.authorizationUrl() ?: return@Button
+     context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))
+    },
+    modifier=Modifier.fillMaxWidth()
+   ){Text(if(busy)"Conectando…" else "Conectar con MyCitroën")}
+   if(!configured) Text("Faltan credenciales de aplicación MyCitroën en la compilación.",color=MaterialTheme.colorScheme.error)
+   Text("No se envían órdenes al coche.",color=MaterialTheme.colorScheme.onSurfaceVariant)
   }}
  }
 }
