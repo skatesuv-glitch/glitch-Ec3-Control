@@ -46,6 +46,20 @@ class SafeStellantisCommunityDiagnostic(
                 header("Accept", "application/hal+json")
             }
             val vehiclesUrl = a.apiBaseUrl.trimEnd('/') + "/v4/user/vehicles"
+
+            val userRequestUrl = okhttp3.HttpUrl.Builder()
+                .scheme("https")
+                .host("api.groupe-psa.com")
+                .addPathSegments("connectedcar/v4/user")
+                .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                .build()
+            val userProbe = http.newCall(
+                Request.Builder().url(userRequestUrl).apply(headers).get().build()
+            ).execute().use { probe ->
+                val raw = probe.body?.string().orEmpty()
+                Pair(probe.code, safeErrorDetail(raw))
+            }
+
             val vehiclesRequestUrl = okhttp3.HttpUrl.Builder()
                 .scheme("https")
                 .host("api.groupe-psa.com")
@@ -82,8 +96,10 @@ class SafeStellantisCommunityDiagnostic(
                                         authentication = StellantisDiagnosticState.Check.OK,
                                         vehicleDiscovery = StellantisDiagnosticState.Check.OK,
                                         vehicleStatus = StellantisDiagnosticState.Check.PENDING,
-                                        message = "VIN confirmado. La asociación no expone el vehicle_id. " +
-                                            "La lista /user/vehicles es la fuente documentada del ID y respondió 40400."
+                                        message = "VIN confirmado. /user=" + userProbe.first +
+                                            "; /user/vehicles=40400. " +
+                                            (userProbe.second?.let { "Detalle /user: $it" }
+                                                ?: "La asociación no expone el vehicle_id.")
                                     )
                                 }
                             }
