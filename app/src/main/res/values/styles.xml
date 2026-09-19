@@ -1,0 +1,1 @@
+<resources><style name="Theme.EC3Control" parent="android:style/Theme.Material.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">#07131F</item><item name="android:navigationBarColor">#07131F</item></style></resources>
