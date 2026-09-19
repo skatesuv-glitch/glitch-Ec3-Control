@@ -98,8 +98,8 @@ internal class StellantisOtpActivation(
         val secId=requireNotNull(xml["s_id"])
         val iw=iwK0
         val r=mapOf(
-            "R0" to sha256Hex((currentChallenge+";"+iw+";"+serial()).toByteArray()),
-            "R1" to sha256Hex((currentChallenge+";"+iw+";"+iwK1).toByteArray()),
+            "R0" to sha256Hex((challenge+";"+iw+";"+serial()).toByteArray()),
+            "R1" to sha256Hex((challenge+";"+iw+";"+iwK1).toByteArray()),
             "R2" to sha256Hex((challenge+";"+iw+";"+pin).toByteArray())
         )
         return OtpMsRequest(
@@ -131,10 +131,10 @@ internal class StellantisOtpActivation(
 
     private fun getR(pin:String):Map<String,String>{
         val iw=iwK0
-        val challenge=""
+        val currentChallenge=challenge
         return mapOf(
-            "R0" to sha256Hex((challenge+";"+iw+";"+serial()).toByteArray()),
-            "R1" to sha256Hex((challenge+";"+iw+";"+iwK1).toByteArray()),
+            "R0" to sha256Hex((currentChallenge+";"+iw+";"+serial()).toByteArray()),
+            "R1" to sha256Hex((currentChallenge+";"+iw+";"+iwK1).toByteArray()),
             "R2" to sha256Hex((currentChallenge+";"+iw+";").toByteArray())
         )
     }
