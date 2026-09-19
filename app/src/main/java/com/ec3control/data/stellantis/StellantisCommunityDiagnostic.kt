@@ -42,6 +42,8 @@ class SafeStellantisCommunityDiagnostic(
             val headers: Request.Builder.() -> Unit = {
                 header("Authorization", "Bearer " + a.accessToken)
                 header("x-introspect-realm", a.realm)
+                header("User-Agent", "okhttp/4.8.0")
+                header("Accept", "application/hal+json")
             }
             val vehiclesUrl = a.apiBaseUrl.trimEnd('/') + "/v4/user/vehicles"
             val vehicleResponse = http.newCall(Request.Builder().url(vehiclesUrl).apply(headers).get().build()).execute()
