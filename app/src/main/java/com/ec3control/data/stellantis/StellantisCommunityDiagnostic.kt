@@ -110,7 +110,14 @@ class SafeStellantisCommunityDiagnostic(
                     )
                 }
 
-                val statusUrl = "$vehiclesUrl/$id/status"
+                val statusUrl = okhttp3.HttpUrl.Builder()
+                    .scheme("https")
+                    .host("api.groupe-psa.com")
+                    .addPathSegments("connectedcar/v4/user/vehicles/$id/status")
+                    .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                    .addQueryParameter("locale", "es-ES")
+                    .build()
+                    .toString()
                 http.newCall(
                     Request.Builder().url(statusUrl).apply(headers).get().build()
                 ).execute().use { statusResponse ->
@@ -162,7 +169,13 @@ class SafeStellantisCommunityDiagnostic(
         vehicleId: String,
         headers: Request.Builder.() -> Unit
     ): StellantisDiagnosticState {
-        val statusUrl = auth.apiBaseUrl.trimEnd('/') + "/v4/user/vehicles/" + vehicleId + "/status"
+        val statusUrl = okhttp3.HttpUrl.Builder()
+            .scheme("https")
+            .host("api.groupe-psa.com")
+            .addPathSegments("connectedcar/v4/user/vehicles/$vehicleId/status")
+            .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+            .addQueryParameter("locale", "es-ES")
+            .build()
         http.newCall(Request.Builder().url(statusUrl).apply(headers).get().build()).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
