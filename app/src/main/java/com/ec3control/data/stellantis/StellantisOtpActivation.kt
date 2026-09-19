@@ -127,6 +127,48 @@ internal class StellantisOtpActivation(
         return OtpSessionState(iwid,iwTsync,iwK1,iwsecid,iwsecval)
     }
 
+    fun otpSetupParams()=mapOf(
+        "action" to "ActionSetup","mode" to "otp","id" to iwid,"lastsync" to iwTsync,
+        "version" to "Generator-1.0/0.2.11","macid" to macId,"sid" to iwsecid
+    )
+
+    fun acceptOtpSetup(xml:Map<String,String>){
+        require(xml["err"]=="OK"){"OTP setup rejected"}
+        challenge=requireNotNull(xml["challenge"])
+    }
+
+    fun otpFinalizeParams():Map<String,String>{
+        val iw=iwK0
+        val r=mapOf(
+            "R0" to sha256Hex((challenge+";"+iw+";"+serial()).toByteArray()),
+            "R1" to sha256Hex((challenge+";"+iw+";"+iwK1).toByteArray()),
+            "R2" to sha256Hex((challenge+";"+iw+";").toByteArray())
+        )
+        return mapOf(
+            "action" to "ActionFinalize","mode" to "otp","id" to iwid,"lastsync" to iwTsync,
+            "version" to "Generator-1.0/0.2.11","lang" to "fr","ack" to "","macid" to macId,
+            "keytype" to "0","sid" to iwsecid
+        )+r
+    }
+
+    fun acceptOtpFinalize(xml:Map<String,String>,pin:String):Boolean{
+        val sync=synchronize(xml,pin)
+        require(sync.ok){sync.message}
+        return xml.containsKey("J")
+    }
+
+    fun generateOtp(defi:String):String{
+        require(iwK1.isNotBlank() && iwsecval.isNotBlank()){"OTP session incomplete"}
+        val digest=MessageDigest.getInstance("SHA-256").digest((iwK1+":"+defi+":"+iwsecval).toByteArray())
+        fun u32(off:Int):Long=((digest[off].toLong() and 255L) shl 24) or ((digest[off+1].toLong() and 255L) shl 16) or ((digest[off+2].toLong() and 255L) shl 8) or (digest[off+3].toLong() and 255L)
+        var n=((u32(0) and 0x0fffffffL)*1024L)+(u32(4) and 1023L)
+        if(n==0L) return "0"
+        val alphabet="abcdefghijklmnopqrstuvwxyz0123456789"
+        val out=StringBuilder()
+        while(n>0){out.append(alphabet[(n%36L).toInt()]);n/=36L}
+        return out.toString()
+    }
+
     private fun serial()=deviceId+"/_/"+iwalea
     private fun generateKma(pin:String)=sha256Hex((pin+";"+serial()).toByteArray()).take(32)
     private class DefaultIwTokenizer(private val value:String){
