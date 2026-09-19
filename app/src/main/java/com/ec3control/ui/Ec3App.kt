@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.ec3control.BuildConfig
 import com.ec3control.core.model.VehicleSnapshot
 import com.ec3control.data.demo.DemoVehicleGateway
 import com.ec3control.data.stellantis.*
