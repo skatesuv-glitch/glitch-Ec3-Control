@@ -89,7 +89,10 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var state by remember{mutableStateOf(StellantisDiagnosticState())}
  var busy by remember{mutableStateOf(false)}
  var manualCode by remember{mutableStateOf("")}
- var remoteProbe by remember{mutableStateOf<RemoteServicesProbe?>(null)}\n var remoteAccessToken by remember{mutableStateOf<String?>(null)}\n var smsResult by remember{mutableStateOf<RemoteServicesSmsResult?>(null)}\n var smsBusy by remember{mutableStateOf(false)}
+ var remoteProbe by remember{mutableStateOf<RemoteServicesProbe?>(null)}
+ var remoteAccessToken by remember{mutableStateOf<String?>(null)}
+ var smsResult by remember{mutableStateOf<RemoteServicesSmsResult?>(null)}
+ var smsBusy by remember{mutableStateOf(false)}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
  val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
