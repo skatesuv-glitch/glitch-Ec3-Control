@@ -11,18 +11,16 @@ object StellantisMapper {
         odometerKm = status.odometerKm,
         batteryHealthPercent = status.batteryHealthPercent,
         outsideTemperatureC = status.outsideTemperatureC,
-        plugged = inferPlugged(status.chargingStatus),
+        plugged = status.plugged ?: inferPlugged(status.chargingStatus),
         charging = status.chargingStatus?.equals("InProgress", ignoreCase = true),
         chargingPowerKw = status.chargingRate,
         chargingTargetPercent = null,
         climateRunning = status.preconditioningStatus?.equals("Enabled", ignoreCase = true),
         updatedAtEpochMillis = status.updatedAtEpochMillis
     )
-
     private fun inferPlugged(status: String?): Boolean? = when {
         status == null -> null
         status.equals("Disconnected", true) -> false
-        status.equals("No", true) -> false
         else -> true
     }
 }
