@@ -96,6 +96,8 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var smsCode by remember{mutableStateOf("")}
  var localPin by remember{mutableStateOf("")}
  var localPinConfirm by remember{mutableStateOf("")}
+ var otpBusy by remember{mutableStateOf(false)}
+ var otpResult by remember{mutableStateOf<OtpNetworkResult?>(null)}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
  val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
@@ -122,7 +124,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Text("BUILD OTP-2026.09.19-C",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Text("BUILD OTP-2026.09.19-D",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
@@ -172,11 +174,21 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
     )
     val otpFormReady=smsCode.isNotBlank() && localPin.length==4 && localPinConfirm==localPin
     Button(
-     enabled=false,
-     onClick={},
+     enabled=otpFormReady && !otpBusy && remoteAccessToken!=null,
+     onClick={
+      val token=remoteAccessToken ?: return@Button
+      val code=smsCode; val pin=localPin
+      scope.launch{
+       otpBusy=true
+       otpResult=StellantisOtpNetwork().activate(token,code,pin)
+       smsCode=""; localPin=""; localPinConfirm=""
+       otpBusy=false
+      }
+     },
      modifier=Modifier.fillMaxWidth()
-    ){Text(if(otpFormReady)"Activar OTP · preparado" else "Activar OTP · completa los datos")}
-    Text("El código SMS y el PIN nuevo permanecen solo en memoria. Los PIN deben coincidir. La activación criptográfica sigue bloqueada hasta verificar el protocolo completo.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+    ){Text(if(otpBusy)"Activando OTP…" else if(otpFormReady)"Activar OTP" else "Activar OTP · completa los datos")}
+    otpResult?.let{Text(it.message,color=if(it.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)}
+    Text("El código SMS y el PIN nuevo permanecen solo en memoria. Los PIN deben coincidir. Al pulsar Activar OTP, el código y el PIN se usan localmente para la activación criptográfica y se borran de estos campos al terminar.",color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
