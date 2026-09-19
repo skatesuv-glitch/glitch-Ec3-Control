@@ -27,7 +27,7 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    if(ms!=null){
     val wire=ms.params.filterKeys{!it.startsWith("_local_")}
     val msResponse=get(wire,false)
-    if(msResponse["err"]!="OK") return@withContext OtpNetworkResult(false,"OTP MS synchronization rejected")
+    val msSync=otp.acceptMsSync(msResponse,pin,ms)\n    if(!msSync.ok) return@withContext OtpNetworkResult(false,msSync.message)\n    otp.sessionState()
    }
    OtpNetworkResult(true,"OTP activado. Preparado para solicitar token RemoteServices.")
   }catch(_:Exception){
