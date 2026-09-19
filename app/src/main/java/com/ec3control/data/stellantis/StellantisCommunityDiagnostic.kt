@@ -46,8 +46,12 @@ class SafeStellantisCommunityDiagnostic(
                 header("Accept", "application/hal+json")
             }
             val vehiclesUrl = a.apiBaseUrl.trimEnd('/') + "/v4/user/vehicles"
+            val vehiclesRequestUrl = okhttp3.HttpUrl.get(vehiclesUrl).newBuilder()
+                .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                .addQueryParameter("locale", "es-ES")
+                .build()
             val vehicleResponse = http.newCall(
-                Request.Builder().url(vehiclesUrl).apply(headers).get().build()
+                Request.Builder().url(vehiclesRequestUrl).apply(headers).get().build()
             ).execute()
 
             vehicleResponse.use { response ->
