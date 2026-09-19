@@ -9,6 +9,7 @@ import javax.crypto.spec.SecretKeySpec
 internal data class OtpActivationSetup(val kfact:String,val kiw:String,val pinmode:String)
 internal data class OtpActivationResult(val ok:Boolean,val message:String)
 internal data class OtpMsRequest(val params:Map<String,String>,val secId:String,val secVal:String)
+internal data class OtpSessionState(val iwid:String,val iwTsync:String,val iwK1:String,val iwsecid:String,val iwsecval:String)
 
 /** Local state for the InWebo activation handshake. Secrets are kept in memory only. */
 internal class StellantisOtpActivation(
@@ -25,6 +26,8 @@ internal class StellantisOtpActivation(
     private var kiw=""
     private var pinmode=""
     private var challenge=""
+    private var iwsecid=""
+    private var iwsecval=""
 
     init {
         // Exact initial IWData fields consumed by load.py/load1xx from DEFAULT_TOKEN.
@@ -110,6 +113,18 @@ internal class StellantisOtpActivation(
             secId=secId,
             secVal=secVal
         )
+    }
+
+    fun acceptMsSync(xml:Map<String,String>,pin:String,request:OtpMsRequest):OtpActivationResult{
+        if(xml["err"]!="OK") return OtpActivationResult(false,"OTP MS synchronization rejected")
+        iwsecid=request.secId
+        iwsecval=request.secVal
+        return synchronize(xml,pin)
+    }
+
+    fun sessionState():OtpSessionState{
+        require(iwid.isNotBlank() && iwK1.isNotBlank() && iwsecid.isNotBlank() && iwsecval.isNotBlank()){"OTP session incomplete"}
+        return OtpSessionState(iwid,iwTsync,iwK1,iwsecid,iwsecval)
     }
 
     private fun serial()=deviceId+"/_/"+iwalea
