@@ -14,13 +14,13 @@ import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
-private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHARGE("Carga"),CLIMATE("Clima"),VEHICLE("Vehículo")}
+private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHARGE("Carga"),CLIMATE("Clima"),VEHICLE("Vehículo"),DIAGNOSTIC("Prueba")}
 
 @Composable fun Ec3App(gateway: VehicleGateway = remember { DemoVehicleGateway() }){
  var tab by remember{mutableStateOf(Tab.HOME)}
  var snapshot by remember{mutableStateOf<VehicleSnapshot?>(null)}
  LaunchedEffect(Unit){snapshot=gateway.getVehicle()}
- Scaffold(bottomBar={NavigationBar{Tab.entries.forEach{item->NavigationBarItem(selected=tab==item,onClick={tab=item},icon={Text(when(item){Tab.HOME->"⌂";Tab.BATTERY->"▣";Tab.CHARGE->"⚡";Tab.CLIMATE->"❄";Tab.VEHICLE->"●"})},label={Text(item.label)})}}}){padding->
+ Scaffold(bottomBar={NavigationBar{Tab.entries.forEach{item->NavigationBarItem(selected=tab==item,onClick={tab=item},icon={Text(when(item){Tab.HOME->"⌂";Tab.BATTERY->"▣";Tab.CHARGE->"⚡";Tab.CLIMATE->"❄";Tab.VEHICLE->"●";Tab.DIAGNOSTIC->"↔"})},label={Text(item.label)})}}}){padding->
   val mod=Modifier.padding(padding)
   when(tab){
    Tab.HOME->HomeScreen(gateway,snapshot,{snapshot=it},mod)
@@ -28,6 +28,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Tab.CHARGE->ChargeScreen(gateway,snapshot,{snapshot=it},mod)
    Tab.CLIMATE->ClimateScreen(gateway,snapshot,{snapshot=it},mod)
    Tab.VEHICLE->VehicleScreen(snapshot,mod)
+   Tab.DIAGNOSTIC->DiagnosticScreen(mod)
   }
  }
 }
@@ -73,3 +74,17 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
 }
 
 @Composable private fun Metric(label:String,value:String){Column{Text(label,style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);Text(value,style=MaterialTheme.typography.titleMedium)}}
+
+
+@Composable private fun DiagnosticScreen(modifier:Modifier=Modifier){
+ Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
+  Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
+  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+   Text("Plan B · solo lectura",style=MaterialTheme.typography.titleLarge)
+   Metric("OAuth","Pendiente")
+   Metric("Vehículo","Pendiente")
+   Metric("Estado / batería","Pendiente")
+   Text("Esta pantalla experimental no envía órdenes al coche. La app DEMO sigue funcionando por separado.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+  }}
+ }
+}
