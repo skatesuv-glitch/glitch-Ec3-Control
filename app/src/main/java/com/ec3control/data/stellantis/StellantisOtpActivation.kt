@@ -8,7 +8,7 @@ import javax.crypto.spec.SecretKeySpec
 
 internal data class OtpActivationSetup(val kfact:String,val kiw:String,val pinmode:String)
 internal data class OtpActivationResult(val ok:Boolean,val message:String)
-internal data class OtpMsRequest(val params:Map<String,String>)
+internal data class OtpMsRequest(val params:Map<String,String>,val secId:String,val secVal:String)
 
 /** Local state for the InWebo activation handshake. Secrets are kept in memory only. */
 internal class StellantisOtpActivation(
@@ -38,7 +38,7 @@ internal class StellantisOtpActivation(
 
     fun finalizeParams(smsCode:String,pin:String):Map<String,String>{
         require(pin.length==4 && pin.all(Char::isDigit)){"PIN must have 4 digits"}
-        val modulus=BigInteger(kfact,16)
+        val modulus=BigInteger(kiw,16)
         val kma=generateKma(pin)
         val kmaCrypt=StellantisOaep.encode(kma.hexToBytes(),modulus,random=random).toHex()
         val pinCrypt=StellantisOaep.encode(pin.toByteArray(),modulus,random=random).toHex()
