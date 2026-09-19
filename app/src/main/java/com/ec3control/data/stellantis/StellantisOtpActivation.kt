@@ -100,10 +100,14 @@ internal class StellantisOtpActivation(
             "R1" to sha256Hex((challenge+";"+iw+";"+iwK1).toByteArray()),
             "R2" to sha256Hex((challenge+";"+iw+";"+pin).toByteArray())
         )
-        return OtpMsRequest(mapOf(
-            "action" to "ActionFinalize","mode" to "ms","ms_id0" to requireNotNull(xml["ms_id"]),
-            "ms_val0" to encodedKey,"macid" to macId,"id" to iwid,"lastsync" to iwTsync,"ms_n" to "1"
-        )+r+mapOf("_local_sec_id" to secId,"_local_sec_val" to secVal))
+        return OtpMsRequest(
+            params=mapOf(
+                "action" to "ActionFinalize","mode" to "ms","ms_id0" to requireNotNull(xml["ms_id"]),
+                "ms_val0" to encodedKey,"macid" to macId,"id" to iwid,"lastsync" to iwTsync,"ms_n" to "1"
+            )+r,
+            secId=secId,
+            secVal=secVal
+        )
     }
 
     private fun serial()=deviceId+"/_/"+iwalea
