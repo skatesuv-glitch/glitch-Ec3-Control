@@ -6,6 +6,8 @@ import com.ec3control.core.vehicle.VehicleGateway
 
 class DemoVehicleGateway : VehicleGateway {
     private var climate = false
+    private var charging = false
+    private var plugged = true
 
     override suspend fun getVehicle() = snapshot()
     override suspend fun refresh() = snapshot()
@@ -15,8 +17,16 @@ class DemoVehicleGateway : VehicleGateway {
         return Result.success(Unit)
     }
 
-    override suspend fun startCharging() = Result.success(Unit)
-    override suspend fun stopCharging() = Result.success(Unit)
+    override suspend fun startCharging(): Result<Unit> {
+        if (!plugged) return Result.failure(IllegalStateException("Cable desconectado"))
+        charging = true
+        return Result.success(Unit)
+    }
+
+    override suspend fun stopCharging(): Result<Unit> {
+        charging = false
+        return Result.success(Unit)
+    }
 
     private fun snapshot() = VehicleSnapshot(
         origin = DataOrigin.DEMO,
@@ -25,9 +35,9 @@ class DemoVehicleGateway : VehicleGateway {
         odometerKm = 12485.0,
         batteryHealthPercent = 98.0,
         outsideTemperatureC = 21.0,
-        plugged = false,
-        charging = false,
-        chargingPowerKw = 0.0,
+        plugged = plugged,
+        charging = charging,
+        chargingPowerKw = if (charging) 7.4 else 0.0,
         chargingTargetPercent = 80,
         climateRunning = climate,
         updatedAtEpochMillis = System.currentTimeMillis()
