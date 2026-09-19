@@ -22,7 +22,7 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    otp.acceptSetup(setup)
    val fin=get(otp.finalizeParams(smsCode,pin),false)
    val first=otp.synchronize(fin,pin)
-   if(!first.ok) return@withContext first
+   if(!first.ok) return@withContext OtpNetworkResult(false,first.message)
    val ms=otp.buildMsSync(fin,pin)
    if(ms!=null){
     val wire=ms.params.filterKeys{!it.startsWith("_local_")}
