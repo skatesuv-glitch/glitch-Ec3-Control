@@ -7,7 +7,8 @@ import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 
 internal data class OtpActivationSetup(val kfact:String,val kiw:String,val pinmode:String)
-internal data class OtpActivationResult(val ok:Boolean,val message:String)\ninternal data class OtpMsRequest(val params:Map<String,String>)
+internal data class OtpActivationResult(val ok:Boolean,val message:String)
+internal data class OtpMsRequest(val params:Map<String,String>)
 
 /** Local state for the InWebo activation handshake. Secrets are kept in memory only. */
 internal class StellantisOtpActivation(
