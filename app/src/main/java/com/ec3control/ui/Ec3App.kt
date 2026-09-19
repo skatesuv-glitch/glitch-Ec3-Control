@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.ec3control.BuildConfig
+import com.ec3control.CitroenOAuthActivity
 import com.ec3control.core.model.VehicleSnapshot
 import com.ec3control.data.demo.DemoVehicleGateway
 import com.ec3control.data.stellantis.*
@@ -122,7 +123,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
     enabled=configured&&!busy,
     onClick={
      val url=oauth?.authorizationUrl() ?: return@Button
-     context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))
+     context.startActivity(Intent(context,CitroenOAuthActivity::class.java).putExtra(CitroenOAuthActivity.EXTRA_URL,url))
     },
     modifier=Modifier.fillMaxWidth()
    ){Text(if(busy)"Conectando…" else "Conectar con MyCitroën")}
