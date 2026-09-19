@@ -49,7 +49,15 @@ class CitroenOAuthActivity : ComponentActivity() {
             uri.host.equals("oauth2redirect", true)
         if (!isCitroenCallback) return false
 
-        // Hand the callback directly to our existing OAuth parser.
+        val code = uri.getQueryParameter("code")
+        val error = uri.getQueryParameter("error")
+
+        // Ignore intermediate custom-scheme redirects until OAuth has a result.
+        if (code.isNullOrBlank() && error.isNullOrBlank()) {
+            return false
+        }
+
+        // Hand only the final OAuth callback to our existing parser.
         startActivity(Intent(this, MainActivity::class.java).apply {
             data = uri
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
