@@ -59,6 +59,36 @@ class SafeStellantisCommunityDiagnostic(
 
             vehicleResponse.use { response ->
                 if (!response.isSuccessful) {
+                    if (response.code == 404) {
+                        val associationUrl = okhttp3.HttpUrl.Builder()
+                            .scheme("https")
+                            .host("api.groupe-psa.com")
+                            .addPathSegments("applications/cvs/v4/mauv/car-associations")
+                            .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                            .addQueryParameter("locale", "es-ES")
+                            .build()
+                        http.newCall(
+                            Request.Builder().url(associationUrl).apply(headers)
+                                .header("x-transaction-id", "1234").get().build()
+                        ).execute().use { associationResponse ->
+                            val associationRaw = associationResponse.body?.string().orEmpty()
+                            if (associationResponse.isSuccessful) {
+                                val associations = Json.parseToJsonElement(associationRaw).jsonArray
+                                val associatedVehicle = associations.firstOrNull()?.jsonObject
+                                    ?.get("vehicle")?.jsonPrimitive?.contentOrNull
+                                if (!associatedVehicle.isNullOrBlank()) {
+                                    return@withContext readVehicleStatus(
+                                        a, associatedVehicle, headers
+                                    )
+                                }
+                            }
+                            return@withContext httpError(
+                                associationResponse.code,
+                                detail = safeErrorDetail(associationRaw)
+                                    ?: "No se encontró asociación de vehículo"
+                            )
+                        }
+                    }
                     return@withContext httpError(
                         response.code,
                         detail = safeErrorDetail(response.body?.string().orEmpty())
@@ -66,8 +96,11 @@ class SafeStellantisCommunityDiagnostic(
                 }
 
                 val root = Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject
-                val id = root["vehicles"]?.jsonArray?.firstOrNull()?.jsonObject
-                    ?.get("id")?.jsonPrimitive?.content
+                val id = root["_embedded"]?.jsonObject
+                    ?.get("vehicles")?.jsonArray?.firstOrNull()?.jsonObject
+                    ?.get("id")?.jsonPrimitive?.contentOrNull
+                    ?: root["vehicles"]?.jsonArray?.firstOrNull()?.jsonObject
+                        ?.get("id")?.jsonPrimitive?.contentOrNull
 
                 if (id.isNullOrBlank()) {
                     return@withContext StellantisDiagnosticState(
@@ -119,6 +152,32 @@ class SafeStellantisCommunityDiagnostic(
             StellantisDiagnosticState(
                 authentication = StellantisDiagnosticState.Check.ERROR,
                 message = "Error de conexión: " + (e.message ?: e::class.java.simpleName)
+            )
+        }
+    }
+
+
+    private fun readVehicleStatus(
+        auth: StellantisRuntimeAuth,
+        vehicleId: String,
+        headers: Request.Builder.() -> Unit
+    ): StellantisDiagnosticState {
+        val statusUrl = auth.apiBaseUrl.trimEnd('/') + "/v4/user/vehicles/" + vehicleId + "/status"
+        http.newCall(Request.Builder().url(statusUrl).apply(headers).get().build()).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                return httpError(response.code, vehicleId, safeErrorDetail(raw))
+            }
+            val status = Json.parseToJsonElement(raw).jsonObject
+            val energy = (status["energy"] ?: status["energies"])?.jsonArray?.firstOrNull()?.jsonObject
+            return StellantisDiagnosticState(
+                authentication = StellantisDiagnosticState.Check.OK,
+                vehicleDiscovery = StellantisDiagnosticState.Check.OK,
+                vehicleStatus = StellantisDiagnosticState.Check.OK,
+                batteryPercent = energy?.get("level")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()?.toInt(),
+                rangeKm = energy?.get("autonomy")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()?.toInt(),
+                vehicleId = vehicleId,
+                message = "Vehículo asociado encontrado. Estado real recibido en solo lectura."
             )
         }
     }
