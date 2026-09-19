@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.ec3control.BuildConfig
 import com.ec3control.core.model.VehicleSnapshot
 import com.ec3control.data.demo.DemoVehicleGateway
@@ -86,6 +87,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  val scope=rememberCoroutineScope()
  var state by remember{mutableStateOf(StellantisDiagnosticState())}
  var busy by remember{mutableStateOf(false)}
+ var manualCode by remember{mutableStateOf("")}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
  val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
@@ -125,6 +127,37 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
     modifier=Modifier.fillMaxWidth()
    ){Text(if(busy)"Conectando…" else "Conectar con MyCitroën")}
    if(!configured) Text("Faltan credenciales de aplicación MyCitroën en la compilación.",color=MaterialTheme.colorScheme.error)
+   HorizontalDivider()
+   Text("Plan B · código OAuth",style=MaterialTheme.typography.titleMedium)
+   Text("Si Citroën no vuelve automáticamente a eC3 Control, pega aquí únicamente el código OAuth de tu propia sesión. No pegues correo, contraseña, PIN ni SMS.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   OutlinedTextField(
+    value=manualCode,
+    onValueChange={manualCode=it.trim()},
+    label={Text("Código OAuth")},
+    singleLine=true,
+    visualTransformation=PasswordVisualTransformation(),
+    modifier=Modifier.fillMaxWidth()
+   )
+   Button(
+    enabled=configured&&!busy&&manualCode.isNotBlank(),
+    onClick={
+     val provider=oauth ?: return@Button
+     val code=manualCode
+     manualCode=""
+     scope.launch{
+      busy=true
+      state=try{
+       val tokens=provider.exchangeCode(code)
+       SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+      }catch(e:Exception){
+       StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth/conexión: "+(e.message?:"error"))
+      }
+      busy=false
+     }
+    },
+    modifier=Modifier.fillMaxWidth()
+   ){Text(if(busy)"Conectando…" else "Usar código OAuth")}
+   Text("El código se mantiene solo en memoria durante esta prueba y se borra del campo al usarlo.",color=MaterialTheme.colorScheme.onSurfaceVariant)
    Text("No se envían órdenes al coche.",color=MaterialTheme.colorScheme.onSurfaceVariant)
   }}
  }
