@@ -88,7 +88,8 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  val scope=rememberCoroutineScope()
  var state by remember{mutableStateOf(StellantisDiagnosticState())}
  var busy by remember{mutableStateOf(false)}
- var manualCode by remember{mutableStateOf("")}\n var remoteProbe by remember{mutableStateOf<RemoteServicesProbe?>(null)}
+ var manualCode by remember{mutableStateOf("")}
+ var remoteProbe by remember{mutableStateOf<RemoteServicesProbe?>(null)}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
  val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
@@ -100,7 +101,9 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   busy=true
   state=try{
    val tokens=provider.exchangeCode(code)
-   SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus().also {\n    remoteProbe=try{ RemoteServicesReadOnlyProbe().probe(tokens.accessToken) }catch(e:Exception){ RemoteServicesProbe(-1,false,"RemoteServices: "+(e.message?:"error")) }\n   }
+   SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus().also {
+    remoteProbe=try{ RemoteServicesReadOnlyProbe().probe(tokens.accessToken) }catch(e:Exception){ RemoteServicesProbe(-1,false,"RemoteServices: "+(e.message?:"error")) }
+   }
   }catch(e:Exception){
    StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth/conexión: "+(e.message?:"error"))
   }
@@ -114,7 +117,9 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
-   Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})\n   Metric("RemoteServices",when{remoteProbe==null->"Pendiente";remoteProbe?.available==true->"Responde ✓";else->"No disponible"})\n   remoteProbe?.let{ Text(it.message,color=MaterialTheme.colorScheme.onSurfaceVariant) }
+   Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
+   Metric("RemoteServices",when{remoteProbe==null->"Pendiente";remoteProbe?.available==true->"Responde ✓";else->"No disponible"})
+   remoteProbe?.let{ Text(it.message,color=MaterialTheme.colorScheme.onSurfaceVariant) }
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
    if(oauthError!=null) Text("OAuth: $oauthError",color=MaterialTheme.colorScheme.error)
