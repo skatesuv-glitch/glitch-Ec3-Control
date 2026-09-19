@@ -46,7 +46,7 @@ class SafeStellantisCommunityDiagnostic(
                 header("Accept", "application/hal+json")
             }
             val vehiclesUrl = a.apiBaseUrl.trimEnd('/') + "/v4/user/vehicles"
-            val vehiclesRequestUrl = okhttp3.HttpUrl.get(vehiclesUrl).newBuilder()
+            val vehiclesRequestUrl = okhttp3.HttpUrl.Builder()\n                .scheme("https")\n                .host("api.groupe-psa.com")\n                .addPathSegments("connectedcar/v4/user/vehicles")
                 .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
                 .addQueryParameter("locale", "es-ES")
                 .build()
