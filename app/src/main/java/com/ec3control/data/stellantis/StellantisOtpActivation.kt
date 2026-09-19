@@ -7,7 +7,7 @@ import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 
 internal data class OtpActivationSetup(val kfact:String,val kiw:String,val pinmode:String)
-internal data class OtpActivationResult(val ok:Boolean,val message:String)
+internal data class OtpActivationResult(val ok:Boolean,val message:String)\ninternal data class OtpMsRequest(val params:Map<String,String>)
 
 /** Local state for the InWebo activation handshake. Secrets are kept in memory only. */
 internal class StellantisOtpActivation(
@@ -59,7 +59,30 @@ internal class StellantisOtpActivation(
         xml["K0"]?.takeIf{it.isNotEmpty()}?.let{iwK0=aes.doFinal(it.hexToBytes()).toHex()}
         xml["K1"]?.takeIf{it.isNotEmpty()}?.let{iwK1=aes.doFinal(it.hexToBytes()).toHex()}
         xml["dK1"]?.takeIf{it.isNotEmpty()}?.let{iwK1=sha256Hex((iwK1+";"+it).toByteArray()).take(32)}
-        return OtpActivationResult(true,if(xml.containsKey("ms_n"))"OTP activation accepted; MS sync pending" else "OTP activation accepted")
+        return OtpActivationResult(true,if((xml["ms_n"]?.toIntOrNull() ?: 0)>0)"OTP activation accepted; MS sync pending" else "OTP activation accepted")
+    }
+
+    fun buildMsSync(xml:Map<String,String>,pin:String):OtpMsRequest?{
+        val count=xml["ms_n"]?.toIntOrNull() ?: 0
+        if(count==0) return null
+        require(count==1){"Unsupported MS sync count"}
+        val challenge=requireNotNull(xml["challenge"])
+        val serverModulus=StellantisOaep.decodePublicOperation(requireNotNull(xml["ms_key"]).hexToBytes(),BigInteger(kfact,16))
+        val randomKey=ByteArray(16).also(random::nextBytes)
+        val encodedKey=StellantisOaep.encode(randomKey,BigInteger(1,serverModulus),random=random).toHex()
+        val aes=Cipher.getInstance("AES/ECB/NoPadding").apply{init(Cipher.ENCRYPT_MODE,SecretKeySpec(generateKma(pin).hexToBytes(),"AES"))}
+        val secVal=aes.doFinal(randomKey).toHex()
+        val secId=requireNotNull(xml["s_id"])
+        val iw=iwK0
+        val r=mapOf(
+            "R0" to sha256Hex((challenge+";"+iw+";"+serial()).toByteArray()),
+            "R1" to sha256Hex((challenge+";"+iw+";"+iwK1).toByteArray()),
+            "R2" to sha256Hex((challenge+";"+iw+";"+pin).toByteArray())
+        )
+        return OtpMsRequest(mapOf(
+            "action" to "ActionFinalize","mode" to "ms","ms_id0" to requireNotNull(xml["ms_id"]),
+            "ms_val0" to encodedKey,"macid" to macId,"id" to iwid,"lastsync" to iwTsync,"ms_n" to "1"
+        )+r+mapOf("_local_sec_id" to secId,"_local_sec_val" to secVal))
     }
 
     private fun serial()=deviceId+"/_/"+iwalea
