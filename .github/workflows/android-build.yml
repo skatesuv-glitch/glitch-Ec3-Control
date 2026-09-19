@@ -2,6 +2,8 @@ name: Android Build
 
 on:
   push:
+    branches: [ main, experiment/stellantis-community ]
+  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
