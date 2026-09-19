@@ -8,5 +8,6 @@
 <category android:name="android.intent.category.DEFAULT"/>
 <category android:name="android.intent.category.BROWSABLE"/>
 <data android:scheme="ec3control" android:host="oauth"/>
+<data android:scheme="mymacsdk" android:host="oauth2redirect" android:pathPrefix="/es"/>
 </intent-filter>
 </activity></application></manifest>
