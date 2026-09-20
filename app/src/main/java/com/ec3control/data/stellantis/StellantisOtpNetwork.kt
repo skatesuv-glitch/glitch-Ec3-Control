@@ -37,6 +37,21 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    OtpNetworkResult(false,"No se pudo completar la activación OTP. Solicita un código nuevo y vuelve a intentarlo.")
   }
  }
+ suspend fun generatePasswordOtp(pin:String):String=withContext(Dispatchers.IO){
+  require(pin.length==4 && pin.all(Char::isDigit)){"4 digit PIN required"}
+  val otp=requireNotNull(activeOtp){"OTP session unavailable"}
+  fun cycle():Pair<Boolean,String>{
+   val setup=get(otp.otpSetupParams(),true)
+   otp.acceptOtpSetup(setup)
+   val fin=get(otp.otpFinalizeParams(),false)
+   val twice=otp.acceptOtpFinalize(fin,pin)
+   val defi=requireNotNull(fin["defi"]){"OTP defi missing"}
+   return twice to defi
+  }
+  var result=cycle()
+  if(result.first) result=cycle()
+  otp.generateOtp(result.second)
+ }
  private fun get(params:Map<String,String>,setup:Boolean):Map<String,String>{
   val b=HttpUrl.Builder().scheme("https").host("otp.mpsa.com").addPathSegments("iwws/MAC")
   params.forEach{(k,v)->b.addQueryParameter(k,v)}
