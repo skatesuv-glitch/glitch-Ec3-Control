@@ -114,10 +114,32 @@ class SafeStellantisCommunityDiagnostic(
                                                 else -> "presente"
                                             }
                                         }
+                                        fun safeArrayShape(key: String): String {
+                                            val array = row[key] as? JsonArray ?: return safeValue(key)
+                                            if (array.isEmpty()) return "array(0)"
+                                            return array.mapIndexed { itemIndex, item ->
+                                                when (item) {
+                                                    is JsonObject -> {
+                                                        val keys = item.keys.sorted().joinToString(",")
+                                                        val safeLabels = listOf("name", "type", "status", "service", "code")
+                                                            .mapNotNull { label ->
+                                                                item[label]?.jsonPrimitive?.contentOrNull
+                                                                    ?.takeIf { it.isNotBlank() }
+                                                                    ?.let { label + "=" + it.take(40) }
+                                                            }.joinToString(",")
+                                                        "item" + (itemIndex + 1) + "{keys=" + keys +
+                                                            if (safeLabels.isNotBlank()) "; " + safeLabels + "}" else "}"
+                                                    }
+                                                    is JsonPrimitive -> "item" + (itemIndex + 1) + "=primitive"
+                                                    is JsonArray -> "item" + (itemIndex + 1) + "=array(" + item.size + ")"
+                                                    else -> "item" + (itemIndex + 1) + "=presente"
+                                                }
+                                            }.joinToString("; ")
+                                        }
                                         "#" + (index + 1) +
                                             " status=" + safeValue("car_association_status") +
-                                            ", services=" + safeValue("services") +
-                                            ", checks=" + safeValue("validated_checks") +
+                                            ", services=[" + safeArrayShape("services") + "]" +
+                                            ", checks=[" + safeArrayShape("validated_checks") + "]" +
                                             ", vehicle=" + safeValue("vehicle") +
                                             ", customer=" + if (row["customer"] != null) "presente" else "ausente"
                                     }.joinToString(" | ")
