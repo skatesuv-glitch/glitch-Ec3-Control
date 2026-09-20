@@ -153,6 +153,27 @@ class SafeStellantisCommunityDiagnostic(
                                         }
                                         associationEndUserProbe.close()
                                     }
+                                    // Probe the MAUV association resource itself. The Connected Car v4
+                                    // vehicle/status route returned 404 for both VIN and association UUID,
+                                    // so inspect only safe response shape from the association family.
+                                    val associationResourceUrl = okhttp3.HttpUrl.Builder()
+                                        .scheme("https")
+                                        .host("api.groupe-psa.com")
+                                        .addPathSegments("applications/cvs/v4/mauv/car-associations")
+                                        .addPathSegment(associationId.orEmpty())
+                                        .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                                        .addQueryParameter("locale", "es-ES")
+                                        .build()
+                                    var associationResourceCode: Int? = null
+                                    if (!associationId.isNullOrBlank()) {
+                                        http.newCall(
+                                            Request.Builder().url(associationResourceUrl).apply(headers)
+                                                .header("x-transaction-id", "1234").get().build()
+                                        ).execute().use { associationResource ->
+                                            associationResourceCode = associationResource.code
+                                        }
+                                    }
+
                                     // Read-only schema fingerprint. Never expose VIN/customer values.
                                     // This lets us compare our association shape with accounts where
                                     // Connected Car resolves a vehicle_id, without guessing endpoints.
@@ -222,7 +243,8 @@ class SafeStellantisCommunityDiagnostic(
                                             "; /user/vehicles=40400; statusVIN=" + normalCode +
                                             "; statusVIN+endUser=" + endUserCode +
                                             "; statusAssocId=" + (associationIdCode ?: "n/a") +
-                                            "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") + ". " +
+                                            "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") +
+                                            "; mauvAssocResource=" + (associationResourceCode ?: "n/a") + ". " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
