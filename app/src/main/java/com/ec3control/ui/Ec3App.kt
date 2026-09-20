@@ -98,6 +98,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var localPinConfirm by remember{mutableStateOf("")}
  var otpBusy by remember{mutableStateOf(false)}
  var otpResult by remember{mutableStateOf<OtpNetworkResult?>(null)}
+ val otpNetwork=remember(context){StellantisOtpNetwork(context.applicationContext)}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
  val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
@@ -124,7 +125,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Text("BUILD MQTT-2026.09.20-H · ZERO-ID READ-ONLY",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Text("BUILD MQTT-2026.09.20-I · SECURE OTP + ZERO-ID",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
@@ -146,6 +147,18 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
     Text("El SMS se solicita solo al pulsar este botón. No escribas aquí el código ni tu PIN.",color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    smsResult?.let{ Text(it.message,color=if(it.accepted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) }
+   if(otpNetwork.hasStoredOtpSession() && remoteAccessToken!=null){
+    Button(enabled=!otpBusy,onClick={
+     val token=remoteAccessToken ?: return@Button
+     scope.launch{
+      otpBusy=true
+      val remote=otpNetwork.requestRemoteServicesTokenStored(token)
+      otpResult=if(remote.ok && remote.session!=null) otpNetwork.probeMqttReadOnly(token,remote.session) else remote
+      otpBusy=false
+     }
+    },modifier=Modifier.fillMaxWidth()){Text(if(otpBusy)"Renovando token…" else "Usar activación segura guardada")}
+    Text("Sesión OTP cifrada disponible en este teléfono. No hace falta solicitar otro SMS.",color=MaterialTheme.colorScheme.primary)
+   }
    if(smsResult?.accepted==true){
     Text("Activación OTP · solo en este teléfono",style=MaterialTheme.typography.titleMedium)
     OutlinedTextField(
@@ -180,7 +193,6 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
       val code=smsCode; val pin=localPin
       scope.launch{
        otpBusy=true
-       val otpNetwork=StellantisOtpNetwork()
        val activation=otpNetwork.activate(token,code,pin)
        otpResult=if(activation.ok){
         val remote=otpNetwork.requestRemoteServicesToken(token,pin)
@@ -193,7 +205,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
      modifier=Modifier.fillMaxWidth()
     ){Text(if(otpBusy)"Activando RemoteServices…" else if(otpFormReady)"Activar RemoteServices" else "Activar RemoteServices · completa los datos")}
     otpResult?.let{Text(it.message,color=if(it.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)}
-    Text("El código SMS y el PIN nuevo permanecen solo en memoria. Los PIN deben coincidir. Al pulsar Activar RemoteServices, el código y el PIN se usan localmente para la activación criptográfica y la solicitud del token; se borran de estos campos al terminar. No se envían órdenes al coche.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("El SMS se borra al terminar. La sesión OTP y el PIN se guardan cifrados con Android Keystore únicamente en este teléfono para renovar RemoteServices sin repetir SMS. No se envían órdenes al coche.",color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
