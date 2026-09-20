@@ -61,7 +61,7 @@ internal class StellantisOtpActivation(
     )
 
     fun acceptSetup(xml:Map<String,String>):OtpActivationSetup{
-        require(xml["err"]=="OK"){"OTP setup rejected"}
+        require(xml["err"]=="OK"){otpServerReject("setup",xml)}
         val encodedKiw=requireNotNull(xml["Kiw"]); kfact=requireNotNull(xml["Kfact"]); pinmode=requireNotNull(xml["pinmode"])
         kiw=StellantisOaep.decodePublicOperation(encodedKiw.hexToBytes(),BigInteger(kfact,16)).toHex()
         return OtpActivationSetup(kfact,kiw,pinmode)
@@ -84,7 +84,7 @@ internal class StellantisOtpActivation(
 
     fun synchronize(xml:Map<String,String>,pin:String):OtpActivationResult{
         xml["challenge"]?.let{challenge=it}
-        if(xml["err"]!="OK") return OtpActivationResult(false,"OTP activation rejected")
+        if(xml["err"]!="OK") return OtpActivationResult(false,otpServerReject("activation",xml))
         val key=SecretKeySpec(generateKma(pin).hexToBytes(),"AES")
         val aes=Cipher.getInstance("AES/ECB/NoPadding").apply{init(Cipher.DECRYPT_MODE,key)}
         xml["id"]?.takeIf{it.isNotEmpty()}?.let{iwid=it}
@@ -123,7 +123,7 @@ internal class StellantisOtpActivation(
     }
 
     fun acceptMsSync(xml:Map<String,String>,pin:String,request:OtpMsRequest):OtpActivationResult{
-        if(xml["err"]!="OK") return OtpActivationResult(false,"OTP MS synchronization rejected")
+        if(xml["err"]!="OK") return OtpActivationResult(false,otpServerReject("MS synchronization",xml))
         iwsecid=request.secId
         iwsecval=request.secVal
         return synchronize(xml,pin)
@@ -189,6 +189,11 @@ internal class StellantisOtpActivation(
         fun nextIntHex():Int=next().takeIf{it.isNotEmpty()}?.toInt(16) ?: 0
     }
 
+    private fun otpServerReject(stage:String,xml:Map<String,String>):String{
+        val safeKeys=listOf("err","error","code","reason","message","status","retry","retryafter")
+        val safe=safeKeys.mapNotNull{k->xml[k]?.takeIf{it.isNotBlank()}?.let{k+"="+it.take(160)}}.distinct()
+        return "OTP "+stage+" rejected"+if(safe.isEmpty())"" else ": "+safe.joinToString(" | ")
+    }
     private companion object {
         private const val DEFAULT_TOKEN="0.2.11&&&&&&0&&0&&0&&9f13ba238fbabba08e85d93638e98ef5e48682a9d3e5bc325c3dd6fac8199a6ce09e9b4f373aa6a75a905c3d690f6e3335d1e8e5b748ecec3020a794149033f6ada6896db6d73b8d43b8365bbe15b9ac66f49d4e684a3628f1e9f3deda0c4e24aba771946e6085b92c5ad312477152acf8db01e6aea4b409d5ac1a05c2fd4e95&&0&&&&&&&&&&&&0&&0&&0&&0&&0&&0&&0&&0&&&&&&&&0&&0&&0&&0&&0&&2.0.0&&http://m.inwebo.com/&&"
     }
