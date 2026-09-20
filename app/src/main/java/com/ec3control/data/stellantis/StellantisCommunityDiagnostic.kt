@@ -167,25 +167,21 @@ class SafeStellantisCommunityDiagnostic(
                                     var associationResourceCode: Int? = null
                                     var associationResourceShape = "n/a"
                                     if (!associationId.isNullOrBlank()) {
-                                        http.newCall(
+                                        val associationResource = http.newCall(
                                             Request.Builder().url(associationResourceUrl).apply(headers)
                                                 .header("x-transaction-id", "1234").get().build()
-                                        ).execute().use { associationResource ->
-                                            associationResourceCode = associationResource.code
-                                            if (associationResource.isSuccessful) {
-                                                val rawAssociation = associationResource.body?.string().orEmpty()
-                                                runCatching {
-                                                    val obj = json.parseToJsonElement(rawAssociation).jsonObject
-                                                    val topKeys = obj.keys.sorted().joinToString(",")
-                                                    val linksElement = obj["_links"]
-                                                    val linkKeys = if (linksElement is JsonObject) {
-                                                        linksElement.keys.sorted().joinToString(",")
-                                                    } else null
-                                                    associationResourceShape = "keys=[$topKeys]" +
-                                                        if (linkKeys != null) "; links=[$linkKeys]" else ""
-                                                }
+                                        ).execute()
+                                        associationResourceCode = associationResource.code
+                                        if (associationResource.isSuccessful) {
+                                            val rawAssociation = associationResource.body?.string().orEmpty()
+                                            associationResourceShape = try {
+                                                val obj = json.parseToJsonElement(rawAssociation).jsonObject
+                                                "keys=[" + obj.keys.sorted().joinToString(",") + "]"
+                                            } catch (_: Exception) {
+                                                "parse_error"
                                             }
                                         }
+                                        associationResource.close()
                                     }
 
                                     // Read-only schema fingerprint. Never expose VIN/customer values.
