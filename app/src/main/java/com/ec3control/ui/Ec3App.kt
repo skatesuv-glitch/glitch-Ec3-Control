@@ -124,7 +124,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Text("BUILD OTP-2026.09.20-F · XML-54994AD",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Text("BUILD MQTT-2026.09.20-G · READ-ONLY",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
@@ -182,7 +182,10 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
        otpBusy=true
        val otpNetwork=StellantisOtpNetwork()
        val activation=otpNetwork.activate(token,code,pin)
-       otpResult=if(activation.ok) otpNetwork.requestRemoteServicesToken(token,pin) else activation
+       otpResult=if(activation.ok){
+        val remote=otpNetwork.requestRemoteServicesToken(token,pin)
+        if(remote.ok && remote.session!=null) otpNetwork.probeMqttReadOnly(token,remote.session) else remote
+       }else activation
        smsCode=""; localPin=""; localPinConfirm=""
        otpBusy=false
       }
