@@ -77,13 +77,13 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
     if(!r.isSuccessful) return@withContext OtpNetworkResult(false,"RemoteServices token HTTP "+r.code)
     val obj=Json.parseToJsonElement(raw).jsonObject
     val remoteToken=requireNotNull(obj["access_token"]?.jsonPrimitive?.content){"RemoteServices access token missing"}
-    OtpNetworkResult(true,"Token RemoteServices obtenido. No se ha enviado ninguna orden al vehículo.",remoteToken)
+    OtpNetworkResult(true,"Token RemoteServices obtenido. No se ha enviado ninguna orden al vehículo.",remoteToken+"\u0000"+(obj["token_type"]?.jsonPrimitive?.content ?: "")+"\u0000"+(obj["expires_in"]?.jsonPrimitive?.content ?: ""))
    }
   }catch(_:Exception){
    OtpNetworkResult(false,"No se pudo obtener el token RemoteServices.")
   }
  }
- suspend fun probeMqttReadOnly(oauthToken:String,remoteToken:String,realm:String="clientsB2CCitroen"):OtpNetworkResult=withContext(Dispatchers.IO){
+ suspend fun probeMqttReadOnly(oauthToken:String,remoteSession:String,realm:String="clientsB2CCitroen"):OtpNetworkResult=withContext(Dispatchers.IO){\n  val remoteParts=remoteSession.split("\u0000")\n  val remoteToken=remoteParts.firstOrNull().orEmpty()\n  val tokenType=remoteParts.getOrNull(1).orEmpty()\n  val expires=remoteParts.getOrNull(2).orEmpty()
   var mqtt:MqttClient?=null
   try{
    val associationUrl=HttpUrl.Builder().scheme("https").host("api.groupe-psa.com").addPathSegments("applications/cvs/v4/mauv/car-associations")
@@ -100,7 +100,7 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    mqtt.subscribe("psa/RemoteServices/to/cid/"+customer+"/#",0)
    mqtt.subscribe("psa/RemoteServices/events/MPHRTServices/"+vehicle,0)
    OtpNetworkResult(true,"MQTT conectado y suscrito en solo lectura. Cero órdenes publicadas.")
-  }catch(e:Exception){OtpNetworkResult(false,"MQTT solo lectura: "+(e.message ?: e::class.java.simpleName))}
+  }catch(e:Exception){\n   val cause=e.cause?.message\n   val detail=listOfNotNull(e::class.java.simpleName,e.message,cause).filter{it.isNotBlank()}.distinct().joinToString(" | ")\n   OtpNetworkResult(false,"MQTT CONNECT rechazado: "+detail+" · tokenType="+tokenType.ifBlank{"?"}+" · expires="+expires.ifBlank{"?"}+". Token oculto.")\n  }
   finally{try{if(mqtt?.isConnected==true)mqtt?.disconnect()}catch(_:Exception){};try{mqtt?.close()}catch(_:Exception){}}
  }
  private fun get(params:Map<String,String>,setup:Boolean):Map<String,String>{
