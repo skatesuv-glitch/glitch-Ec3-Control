@@ -100,7 +100,9 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    safeFeature("http://xml.org/sax/features/external-parameter-entities",false)
    safeFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd",false)
   }
-  val doc=factory.newDocumentBuilder().parse(ByteArrayInputStream(raw.toByteArray()))
+  val declarationEnd=raw.indexOf("?>")
+  val cleaned=if(raw.trimStart().startsWith("<?xml") && declarationEnd>=0) raw.substring(declarationEnd+2) else raw
+  val doc=factory.newDocumentBuilder().parse(ByteArrayInputStream(cleaned.toByteArray(Charsets.UTF_8)))
   val root=doc.getElementsByTagName(tag).item(0) as? Element ?: error("Bad OTP response")
   val out=linkedMapOf<String,String>()
   for(i in 0 until root.childNodes.length){val n=root.childNodes.item(i);if(n is Element)out[n.tagName]=n.textContent.orEmpty()}
