@@ -5,6 +5,11 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
 import javax.xml.parsers.DocumentBuilderFactory
@@ -51,6 +56,26 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
   var result=cycle()
   if(result.first) result=cycle()
   otp.generateOtp(result.second)
+ }
+ suspend fun requestRemoteServicesToken(accessToken:String,pin:String,realm:String="clientsB2CCitroen"):OtpNetworkResult=withContext(Dispatchers.IO){
+  try{
+   val password=generatePasswordOtp(pin)
+   val url=HttpUrl.Builder().scheme("https").host("api.groupe-psa.com")
+    .addPathSegments("connectedcar/v4/virtualkey/remoteaccess/token")
+    .addQueryParameter("client_id",com.ec3control.BuildConfig.CITROEN_CLIENT_ID).addQueryParameter("locale","es-ES").build()
+   val body=("{\"grant_type\":\"password\",\"password\":\""+password+"\"}").toRequestBody("application/json".toMediaType())
+   val req=Request.Builder().url(url).header("Authorization","Bearer $accessToken").header("x-introspect-realm",realm)
+    .header("User-Agent","okhttp/4.8.0").header("Accept","application/hal+json").post(body).build()
+   http.newCall(req).execute().use{r->
+    val raw=r.body?.string().orEmpty()
+    if(!r.isSuccessful) return@withContext OtpNetworkResult(false,"RemoteServices token HTTP "+r.code)
+    val obj=Json.parseToJsonElement(raw).jsonObject
+    require(!obj["access_token"]?.jsonPrimitive?.content.isNullOrBlank()){"RemoteServices access token missing"}
+    OtpNetworkResult(true,"Token RemoteServices obtenido. No se ha enviado ninguna orden al vehículo.")
+   }
+  }catch(_:Exception){
+   OtpNetworkResult(false,"No se pudo obtener el token RemoteServices.")
+  }
  }
  private fun get(params:Map<String,String>,setup:Boolean):Map<String,String>{
   val b=HttpUrl.Builder().scheme("https").host("otp.mpsa.com").addPathSegments("iwws/MAC")
