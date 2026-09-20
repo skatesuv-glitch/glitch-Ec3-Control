@@ -115,6 +115,44 @@ class SafeStellantisCommunityDiagnostic(
                                         return@withContext parseReadOnlyStatus(raw, associatedVehicle, "VIN+endUser")
                                     }
                                     endUserProbe.close()
+
+                                    // The association payload also carries a UUID-like car_association_id.
+                                    // Probe it independently, read-only, without exposing its value.
+                                    val associationId = association["car_association_id"]?.jsonPrimitive?.contentOrNull
+                                    var associationIdCode: Int? = null
+                                    var associationIdEndUserCode: Int? = null
+                                    if (!associationId.isNullOrBlank()) {
+                                        val associationStatusUrl = okhttp3.HttpUrl.Builder()
+                                            .scheme("https")
+                                            .host("api.groupe-psa.com")
+                                            .addPathSegments("connectedcar/v4/user/vehicles/$associationId/status")
+                                            .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                                            .addQueryParameter("locale", "es-ES")
+                                            .build()
+                                        val associationProbe = http.newCall(
+                                            Request.Builder().url(associationStatusUrl).apply(headers).get().build()
+                                        ).execute()
+                                        associationIdCode = associationProbe.code
+                                        if (associationProbe.isSuccessful) {
+                                            val raw = associationProbe.body?.string().orEmpty()
+                                            associationProbe.close()
+                                            return@withContext parseReadOnlyStatus(raw, associationId, "associationId")
+                                        }
+                                        associationProbe.close()
+
+                                        val associationEndUserProbe = http.newCall(
+                                            Request.Builder()
+                                                .url(associationStatusUrl.newBuilder().addQueryParameter("profile", "endUser").build())
+                                                .apply(headers).get().build()
+                                        ).execute()
+                                        associationIdEndUserCode = associationEndUserProbe.code
+                                        if (associationEndUserProbe.isSuccessful) {
+                                            val raw = associationEndUserProbe.body?.string().orEmpty()
+                                            associationEndUserProbe.close()
+                                            return@withContext parseReadOnlyStatus(raw, associationId, "associationId+endUser")
+                                        }
+                                        associationEndUserProbe.close()
+                                    }
                                     // Read-only schema fingerprint. Never expose VIN/customer values.
                                     // This lets us compare our association shape with accounts where
                                     // Connected Car resolves a vehicle_id, without guessing endpoints.
@@ -182,7 +220,9 @@ class SafeStellantisCommunityDiagnostic(
                                         vehicleStatus = StellantisDiagnosticState.Check.PENDING,
                                         message = "VIN confirmado. /user=" + userProbe.first +
                                             "; /user/vehicles=40400; statusVIN=" + normalCode +
-                                            "; statusVIN+endUser=" + endUserCode + ". " +
+                                            "; statusVIN+endUser=" + endUserCode +
+                                            "; statusAssocId=" + (associationIdCode ?: "n/a") +
+                                            "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") + ". " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
