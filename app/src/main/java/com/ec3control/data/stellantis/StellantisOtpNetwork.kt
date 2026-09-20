@@ -37,7 +37,7 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
     if(!msSync.ok) return@withContext OtpNetworkResult(false,msSync.message)
     otp.sessionState()
    }
-   OtpNetworkResult(true,"OTP activado. Preparado para solicitar token RemoteServices.")
+   otp.sessionState()\n   activeOtp=otp\n   OtpNetworkResult(true,"OTP activado. Preparado para solicitar token RemoteServices.")
   }catch(_:Exception){
    OtpNetworkResult(false,"No se pudo completar la activación OTP. Solicita un código nuevo y vuelve a intentarlo.")
   }
