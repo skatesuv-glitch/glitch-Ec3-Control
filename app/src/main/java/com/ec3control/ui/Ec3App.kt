@@ -125,7 +125,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Text("C3-Control · VIN STATUS PROBE",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Text("C3-Control · ASSOCIATION-ID PROBE · 97F865E",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
