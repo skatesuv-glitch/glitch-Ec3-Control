@@ -102,7 +102,10 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
   }
   val start=raw.indexOf("<"+tag)
   require(start>=0){"OTP response missing "+tag}
-  val cleaned=raw.substring(start)
+  val endTag="</"+tag+">"
+  val end=raw.indexOf(endTag,start)
+  require(end>=0){"OTP response incomplete "+tag}
+  val cleaned=raw.substring(start,end+endTag.length)
   val doc=factory.newDocumentBuilder().parse(ByteArrayInputStream(cleaned.toByteArray(Charsets.UTF_8)))
   val root=doc.getElementsByTagName(tag).item(0) as? Element ?: error("Bad OTP response")
   val out=linkedMapOf<String,String>()
