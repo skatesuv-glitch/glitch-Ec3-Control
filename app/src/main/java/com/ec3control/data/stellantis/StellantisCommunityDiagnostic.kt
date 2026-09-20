@@ -165,22 +165,12 @@ class SafeStellantisCommunityDiagnostic(
                                         .addQueryParameter("locale", "es-ES")
                                         .build()
                                     var associationResourceCode: Int? = null
-                                    var associationResourceShape = "n/a"
                                     if (!associationId.isNullOrBlank()) {
                                         val associationResource = http.newCall(
                                             Request.Builder().url(associationResourceUrl).apply(headers)
                                                 .header("x-transaction-id", "1234").get().build()
                                         ).execute()
                                         associationResourceCode = associationResource.code
-                                        if (associationResource.isSuccessful) {
-                                            val rawAssociation = associationResource.body?.string().orEmpty()
-                                            associationResourceShape = try {
-                                                val obj = json.parseToJsonElement(rawAssociation).jsonObject
-                                                "keys=[" + obj.keys.sorted().joinToString(",") + "]"
-                                            } catch (_: Exception) {
-                                                "parse_error"
-                                            }
-                                        }
                                         associationResource.close()
                                     }
 
@@ -254,8 +244,7 @@ class SafeStellantisCommunityDiagnostic(
                                             "; statusVIN+endUser=" + endUserCode +
                                             "; statusAssocId=" + (associationIdCode ?: "n/a") +
                                             "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") +
-                                            "; mauvAssocResource=" + (associationResourceCode ?: "n/a") +
-                                            "; mauvShape=" + associationResourceShape + ". " +
+                                            "; mauvAssocResource=" + (associationResourceCode ?: "n/a") +. " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
