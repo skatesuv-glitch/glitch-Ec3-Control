@@ -14,9 +14,11 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
 import javax.xml.parsers.DocumentBuilderFactory
-import org.eclipse.paho.client.mqttv3.MqttClient
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions
-import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 
 data class OtpNetworkResult(val ok:Boolean,val message:String,val session:String?=null)
 
@@ -88,7 +90,7 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
   val remoteToken=remoteParts.firstOrNull().orEmpty()
   val tokenType=remoteParts.getOrNull(1).orEmpty()
   val expires=remoteParts.getOrNull(2).orEmpty()
-  var mqtt:MqttClient?=null
+  var socket:SSLSocket?=null
   try{
    val associationUrl=HttpUrl.Builder().scheme("https").host("api.groupe-psa.com").addPathSegments("applications/cvs/v4/mauv/car-associations")
     .addQueryParameter("client_id",com.ec3control.BuildConfig.CITROEN_CLIENT_ID).addQueryParameter("locale","es-ES").build()
@@ -98,18 +100,59 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    val association=Json.parseToJsonElement(raw).jsonArray.firstOrNull()?.jsonObject ?: error("association missing")
    val customer=requireNotNull(association["customer"]?.jsonPrimitive?.content){"customer missing"}
    val vehicle=requireNotNull(association["vehicle"]?.jsonPrimitive?.content){"vehicle missing"}
-   mqtt=MqttClient("ssl://mwa.mpsa.com:8885",MqttClient.generateClientId(),MemoryPersistence())
-   val options=MqttConnectOptions().apply{isCleanSession=true;keepAliveInterval=120;userName="IMA_OAUTH_ACCESS_TOKEN";password=remoteToken.toCharArray();connectionTimeout=12}
-   mqtt.connect(options)
-   mqtt.subscribe("psa/RemoteServices/to/cid/"+customer+"/#",0)
-   mqtt.subscribe("psa/RemoteServices/events/MPHRTServices/"+vehicle,0)
-   OtpNetworkResult(true,"MQTT conectado y suscrito en solo lectura. Cero órdenes publicadas.")
+   socket=(SSLSocketFactory.getDefault().createSocket("mwa.mpsa.com",8885) as SSLSocket).apply{
+    soTimeout=12000
+    val p=sslParameters
+    p.endpointIdentificationAlgorithm="HTTPS"
+    sslParameters=p
+    startHandshake()
+   }
+   val input=DataInputStream(socket.inputStream)
+   val output=DataOutputStream(socket.outputStream)
+   output.write(mqttConnectPacket(remoteToken));output.flush()
+   val connack=readMqttPacket(input)
+   if(connack.first!=0x20 || connack.second.size<2) error("CONNACK inválido")
+   val connackCode=connack.second[1].toInt() and 0xff
+   if(connackCode!=0) error("CONNACK código "+connackCode)
+   mqttSubscribe(output,1,"psa/RemoteServices/to/cid/"+customer+"/#")
+   requireSubAck(input,1)
+   mqttSubscribe(output,2,"psa/RemoteServices/events/MPHRTServices/"+vehicle)
+   requireSubAck(input,2)
+   output.write(byteArrayOf(0xE0.toByte(),0x00));output.flush()
+   OtpNetworkResult(true,"MQTT 3.1.1 conectado con Client ID vacío y suscrito en solo lectura. Cero órdenes publicadas.")
   }catch(e:Exception){
-   val cause=e.cause?.message
-   val detail=listOfNotNull(e::class.java.simpleName,e.message,cause).filter{it.isNotBlank()}.distinct().joinToString(" | ")
-   OtpNetworkResult(false,"MQTT CONNECT rechazado: "+detail+" · tokenType="+tokenType.ifBlank{"?"}+" · expires="+expires.ifBlank{"?"}+". Token oculto.")
-  }
-  finally{try{if(mqtt?.isConnected==true)mqtt?.disconnect()}catch(_:Exception){};try{mqtt?.close()}catch(_:Exception){}}
+   val detail=listOfNotNull(e::class.java.simpleName,e.message,e.cause?.message).filter{it.isNotBlank()}.distinct().joinToString(" | ")
+   OtpNetworkResult(false,"MQTT ZERO-ID: "+detail+" · tokenType="+tokenType.ifBlank{"?"}+" · expires="+expires.ifBlank{"?"}+". Token oculto.")
+  }finally{try{socket?.close()}catch(_:Exception){}}
+ }
+ private fun mqttConnectPacket(token:String):ByteArray{
+  val vh=ByteArrayOutputStream();val d=DataOutputStream(vh)
+  mqttUtf(d,"MQTT");d.writeByte(4);d.writeByte(0xC2);d.writeShort(120)
+  mqttUtf(d,"");mqttUtf(d,"IMA_OAUTH_ACCESS_TOKEN");mqttUtf(d,token);d.flush()
+  return mqttPacket(0x10,vh.toByteArray())
+ }
+ private fun mqttSubscribe(out:DataOutputStream,id:Int,topic:String){
+  val b=ByteArrayOutputStream();val d=DataOutputStream(b);d.writeShort(id);mqttUtf(d,topic);d.writeByte(0);d.flush()
+  out.write(mqttPacket(0x82,b.toByteArray()));out.flush()
+ }
+ private fun requireSubAck(input:DataInputStream,id:Int){
+  val p=readMqttPacket(input)
+  if(p.first!=0x90 || p.second.size<3) error("SUBACK inválido")
+  val got=((p.second[0].toInt() and 0xff) shl 8) or (p.second[1].toInt() and 0xff)
+  if(got!=id || (p.second[2].toInt() and 0xff)==0x80) error("SUBACK rechazado")
+ }
+ private fun readMqttPacket(input:DataInputStream):Pair<Int,ByteArray>{
+  val type=input.readUnsignedByte();var mult=1;var len=0
+  do{val b=input.readUnsignedByte();len+=(b and 127)*mult;mult*=128;if(mult>128*128*128*128)error("MQTT length")}while((b and 128)!=0)
+  val payload=ByteArray(len);input.readFully(payload);return type to payload
+ }
+ private fun mqttPacket(header:Int,payload:ByteArray):ByteArray{
+  val b=ByteArrayOutputStream();b.write(header);var x=payload.size
+  do{var digit=x%128;x/=128;if(x>0)digit=digit or 128;b.write(digit)}while(x>0)
+  b.write(payload);return b.toByteArray()
+ }
+ private fun mqttUtf(out:DataOutputStream,value:String){
+  val bytes=value.toByteArray(Charsets.UTF_8);require(bytes.size<=65535);out.writeShort(bytes.size);out.write(bytes)
  }
  private fun get(params:Map<String,String>,setup:Boolean):Map<String,String>{
   val b=HttpUrl.Builder().scheme("https").host("otp.mpsa.com").addPathSegments("iwws/MAC")
