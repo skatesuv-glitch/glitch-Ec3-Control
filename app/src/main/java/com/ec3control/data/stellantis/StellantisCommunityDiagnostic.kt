@@ -199,17 +199,33 @@ class SafeStellantisCommunityDiagnostic(
                     .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
                     .addQueryParameter("locale", "es-ES")
                     .build()
-                    .toString()
-                http.newCall(
+                val primaryStatus = http.newCall(
                     Request.Builder().url(statusUrl).apply(headers).get().build()
-                ).execute().use { statusResponse ->
-                    if (!statusResponse.isSuccessful) {
-                        return@withContext httpError(
-                            statusResponse.code,
-                            id,
-                            safeErrorDetail(statusResponse.body?.string().orEmpty())
+                ).execute()
+                val statusResponse = if (primaryStatus.isSuccessful) {
+                    primaryStatus
+                } else {
+                    val primaryCode = primaryStatus.code
+                    primaryStatus.close()
+                    val endUserUrl = statusUrl.newBuilder().addQueryParameter("profile", "endUser").build()
+                    val fallbackResponse = http.newCall(
+                        Request.Builder().url(endUserUrl).apply(headers).get().build()
+                    ).execute()
+                    if (!fallbackResponse.isSuccessful) {
+                        val fallbackCode = fallbackResponse.code
+                        val detail = safeErrorDetail(fallbackResponse.body?.string().orEmpty())
+                        fallbackResponse.close()
+                        return@withContext StellantisDiagnosticState(
+                            authentication = StellantisDiagnosticState.Check.OK,
+                            vehicleDiscovery = StellantisDiagnosticState.Check.OK,
+                            vehicleStatus = StellantisDiagnosticState.Check.PENDING,
+                            vehicleId = id,
+                            message = "Status solo lectura: normal HTTP " + primaryCode + "; profile=endUser HTTP " + fallbackCode + (detail?.let { " | " + it } ?: "")
                         )
                     }
+                    fallbackResponse
+                }
+                statusResponse.use { statusResponse ->
 
                     val status = Json.parseToJsonElement(
                         statusResponse.body?.string().orEmpty()
