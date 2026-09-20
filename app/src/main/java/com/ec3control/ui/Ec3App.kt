@@ -124,7 +124,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Text("BUILD OTP-2026.09.19-D",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Text("BUILD OTP-2026.09.20-E",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
@@ -180,15 +180,17 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
       val code=smsCode; val pin=localPin
       scope.launch{
        otpBusy=true
-       otpResult=StellantisOtpNetwork().activate(token,code,pin)
+       val otpNetwork=StellantisOtpNetwork()
+       val activation=otpNetwork.activate(token,code,pin)
+       otpResult=if(activation.ok) otpNetwork.requestRemoteServicesToken(token,pin) else activation
        smsCode=""; localPin=""; localPinConfirm=""
        otpBusy=false
       }
      },
      modifier=Modifier.fillMaxWidth()
-    ){Text(if(otpBusy)"Activando OTP…" else if(otpFormReady)"Activar OTP" else "Activar OTP · completa los datos")}
+    ){Text(if(otpBusy)"Activando RemoteServices…" else if(otpFormReady)"Activar RemoteServices" else "Activar RemoteServices · completa los datos")}
     otpResult?.let{Text(it.message,color=if(it.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)}
-    Text("El código SMS y el PIN nuevo permanecen solo en memoria. Los PIN deben coincidir. Al pulsar Activar OTP, el código y el PIN se usan localmente para la activación criptográfica y se borran de estos campos al terminar.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("El código SMS y el PIN nuevo permanecen solo en memoria. Los PIN deben coincidir. Al pulsar Activar RemoteServices, el código y el PIN se usan localmente para la activación criptográfica y la solicitud del token; se borran de estos campos al terminar. No se envían órdenes al coche.",color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
