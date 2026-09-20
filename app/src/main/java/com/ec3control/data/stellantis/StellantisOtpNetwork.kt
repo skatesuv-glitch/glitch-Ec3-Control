@@ -92,7 +92,6 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
  private fun parse(raw:String,tag:String):Map<String,String>{
   val factory=DocumentBuilderFactory.newInstance().apply{
    isNamespaceAware=false
-   isXIncludeAware=false
    setExpandEntityReferences(false)
    fun safeFeature(name:String,value:Boolean){ try{ setFeature(name,value) }catch(_:Exception){} }
    safeFeature("http://apache.org/xml/features/disallow-doctype-decl",true)
