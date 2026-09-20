@@ -83,6 +83,26 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    OtpNetworkResult(false,"No se pudo obtener el token RemoteServices.")
   }
  }
+ suspend fun probeMqttReadOnly(oauthToken:String,remoteToken:String,realm:String="clientsB2CCitroen"):OtpNetworkResult=withContext(Dispatchers.IO){
+  var mqtt:MqttClient?=null
+  try{
+   val associationUrl=HttpUrl.Builder().scheme("https").host("api.groupe-psa.com").addPathSegments("applications/cvs/v4/mauv/car-associations")
+    .addQueryParameter("client_id",com.ec3control.BuildConfig.CITROEN_CLIENT_ID).addQueryParameter("locale","es-ES").build()
+   val associationRequest=Request.Builder().url(associationUrl).header("Authorization","Bearer "+oauthToken).header("x-introspect-realm",realm)
+    .header("x-transaction-id","1234").header("User-Agent","okhttp/4.8.0").header("Accept","application/hal+json").get().build()
+   val raw=http.newCall(associationRequest).execute().use{r->if(!r.isSuccessful)error("association HTTP "+r.code);r.body?.string().orEmpty()}
+   val association=Json.parseToJsonElement(raw).jsonArray.firstOrNull()?.jsonObject ?: error("association missing")
+   val customer=requireNotNull(association["customer"]?.jsonPrimitive?.content){"customer missing"}
+   val vehicle=requireNotNull(association["vehicle"]?.jsonPrimitive?.content){"vehicle missing"}
+   mqtt=MqttClient("ssl://mwa.mpsa.com:8885","ec3-read-"+UUID.randomUUID().toString().take(8),MemoryPersistence())
+   val options=MqttConnectOptions().apply{isCleanSession=true;keepAliveInterval=120;userName="IMA_OAUTH_ACCESS_TOKEN";password=remoteToken.toCharArray();connectionTimeout=12}
+   mqtt.connect(options)
+   mqtt.subscribe("psa/RemoteServices/to/cid/"+customer+"/#",0)
+   mqtt.subscribe("psa/RemoteServices/events/MPHRTServices/"+vehicle,0)
+   OtpNetworkResult(true,"MQTT conectado y suscrito en solo lectura. Cero órdenes publicadas.")
+  }catch(e:Exception){OtpNetworkResult(false,"MQTT solo lectura: "+(e.message ?: e::class.java.simpleName))}
+  finally{try{if(mqtt?.isConnected==true)mqtt?.disconnect()}catch(_:Exception){};try{mqtt?.close()}catch(_:Exception){}}
+ }
  private fun get(params:Map<String,String>,setup:Boolean):Map<String,String>{
   val b=HttpUrl.Builder().scheme("https").host("otp.mpsa.com").addPathSegments("iwws/MAC")
   params.forEach{(k,v)->b.addQueryParameter(k,v)}
