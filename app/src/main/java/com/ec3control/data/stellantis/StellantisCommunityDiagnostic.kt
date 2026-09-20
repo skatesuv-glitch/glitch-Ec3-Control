@@ -166,6 +166,9 @@ class SafeStellantisCommunityDiagnostic(
                                         .build()
                                     var associationResourceCode: Int? = null
                                     var associationResourceKeys = "n/a"
+                                    var associationEntityShape = "n/a"
+                                    var associationServicesShape = "n/a"
+                                    var associationNotificationShape = "n/a"
                                     if (!associationId.isNullOrBlank()) {
                                         http.newCall(
                                             Request.Builder().url(associationResourceUrl).apply(headers)
@@ -181,6 +184,26 @@ class SafeStellantisCommunityDiagnostic(
                                                     .take(24)
                                                     .toList()
                                                 associationResourceKeys = if (keys.isEmpty()) "none" else keys.joinToString(",")
+                                                fun safeFieldShape(fieldName: String): String {
+                                                    val match = Regex("\\\"" + Regex.escape(fieldName) + "\\\"\\s*:\\s*([^,}]+|\\{[^}]*\\}|\\[[^]]*\\])")
+                                                        .find(raw)?.groupValues?.getOrNull(1)?.trim() ?: return "absent"
+                                                    return when {
+                                                        match.startsWith("{") -> {
+                                                            val nestedKeys = Regex("\\\"([^\\\"]+)\\\"\\s*:").findAll(match)
+                                                                .map { it.groupValues[1] }
+                                                                .filterNot { it.contains("id", true) || it.contains("vin", true) || it.contains("customer", true) }
+                                                                .distinct().take(16).toList()
+                                                            "object(keys=" + nestedKeys.joinToString(",") + ")"
+                                                        }
+                                                        match.startsWith("[") -> "array"
+                                                        match.startsWith("\\\"") -> "text(len=" + (match.length - 2).coerceAtLeast(0) + ")"
+                                                        else -> "scalar"
+                                                    }
+                                                }
+                                                associationEntityShape = safeFieldShape("entity")
+                                                associationServicesShape = safeFieldShape("services")
+                                                val notificationKey = keys.firstOrNull { it.contains("notification", true) }
+                                                associationNotificationShape = notificationKey?.let { safeFieldShape(it) } ?: "absent"
                                             }
                                         }
                                     }
@@ -256,7 +279,10 @@ class SafeStellantisCommunityDiagnostic(
                                             "; statusAssocId=" + (associationIdCode ?: "n/a") +
                                             "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") +
                                             "; mauvAssocResource=" + (associationResourceCode ?: "n/a") +
-                                            "; mauvKeys=" + associationResourceKeys + ". " +
+                                            "; mauvKeys=" + associationResourceKeys +
+                                            "; entityShape=" + associationEntityShape +
+                                            "; servicesShape=" + associationServicesShape +
+                                            "; notificationShape=" + associationNotificationShape + ". " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
