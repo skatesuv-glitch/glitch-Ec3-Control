@@ -18,7 +18,7 @@ internal class StellantisOtpActivation(
     restored:OtpSessionState?=null,
     private val random:SecureRandom=SecureRandom()
 ){
-    private val iwalea=ByteArray(16).also(random::nextBytes).toHex()
+    private val iwalea=restored?.iwalea ?: ByteArray(16).also(random::nextBytes).toHex()
     private var iwid=""
     private var iwTsync="0"
     private var iwK0=""
