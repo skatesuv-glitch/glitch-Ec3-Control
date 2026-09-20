@@ -173,7 +173,8 @@ class SafeStellantisCommunityDiagnostic(
                                             ", services=[" + safeArrayShape("services") + "]" +
                                             ", checks=[" + safeArrayShape("validated_checks") + "]" +
                                             ", vehicle=" + safeValue("vehicle") +
-                                            ", customer=" + if (row["customer"] != null) "presente" else "ausente"
+                                            ", customer=" + when (val customer = row["customer"]) { is JsonObject -> "objeto(keys=" + customer.keys.sorted().joinToString(",") + ")"; is JsonPrimitive -> "presente"; else -> if (customer != null) "presente" else "ausente" } +
+                                            ", assocId=" + when (val assoc = row["car_association_id"]) { is JsonPrimitive -> "presente(len=" + assoc.content.length + ")"; else -> if (assoc != null) "presente" else "ausente" }
                                     }.joinToString(" | ")
                                     return@withContext StellantisDiagnosticState(
                                         authentication = StellantisDiagnosticState.Check.OK,
