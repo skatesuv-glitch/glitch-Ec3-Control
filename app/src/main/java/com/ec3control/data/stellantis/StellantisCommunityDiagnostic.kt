@@ -169,6 +169,9 @@ class SafeStellantisCommunityDiagnostic(
                                     var associationEntityShape = "n/a"
                                     var associationServicesShape = "n/a"
                                     var associationNotificationShape = "n/a"
+                                    var hlaStatusSafe = "n/a"
+                                    var odometerStatusSafe = "n/a"
+                                    var servicesDetailSafe = "n/a"
                                     if (!associationId.isNullOrBlank()) {
                                         http.newCall(
                                             Request.Builder().url(associationResourceUrl).apply(headers)
@@ -204,6 +207,21 @@ class SafeStellantisCommunityDiagnostic(
                                                 associationServicesShape = safeFieldShape("services")
                                                 val notificationKey = keys.firstOrNull { it.contains("notification", true) }
                                                 associationNotificationShape = notificationKey?.let { safeFieldShape(it) } ?: "absent"
+                                                fun safeScalarValue(fieldName: String): String {
+                                                    val m = Regex("\\\"" + Regex.escape(fieldName) + "\\\"\\s*:\\s*(?:\\\"([^\\\"]*)\\\"|([^,}\\s]+))").find(raw)
+                                                        ?: return "absent"
+                                                    val value = (m.groupValues.getOrNull(1)?.takeIf { it.isNotEmpty() }
+                                                        ?: m.groupValues.getOrNull(2).orEmpty()).trim()
+                                                    return if (value.matches(Regex("[A-Za-z0-9_.-]{1,40}"))) value else "present"
+                                                }
+                                                hlaStatusSafe = safeScalarValue("hla_status")
+                                                odometerStatusSafe = safeScalarValue("odometer_data_status")
+                                                val servicesBlock = Regex("\\\"services\\\"\\s*:\\s*\\[([^]]*)\\]").find(raw)?.groupValues?.getOrNull(1)
+                                                if (servicesBlock != null) {
+                                                    val serviceTokens = Regex("\\\"([A-Za-z0-9_-]{1,24})\\\"").findAll(servicesBlock)
+                                                        .map { it.groupValues[1] }.distinct().take(12).toList()
+                                                    servicesDetailSafe = if (serviceTokens.isEmpty()) "array(no-safe-tokens)" else serviceTokens.joinToString(",")
+                                                }
                                             }
                                         }
                                     }
@@ -282,7 +300,10 @@ class SafeStellantisCommunityDiagnostic(
                                             "; mauvKeys=" + associationResourceKeys +
                                             "; entityShape=" + associationEntityShape +
                                             "; servicesShape=" + associationServicesShape +
-                                            "; notificationShape=" + associationNotificationShape + ". " +
+                                            "; notificationShape=" + associationNotificationShape +
+                                            "; hlaStatus=" + hlaStatusSafe +
+                                            "; odometerStatus=" + odometerStatusSafe +
+                                            "; servicesDetail=" + servicesDetailSafe + ". " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
