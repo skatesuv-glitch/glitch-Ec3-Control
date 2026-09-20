@@ -92,14 +92,25 @@ class SafeStellantisCommunityDiagnostic(
                                 val associatedVehicle = association
                                     ?.get("vehicle")?.jsonPrimitive?.contentOrNull
                                 if (!associatedVehicle.isNullOrBlank()) {
+                                    // Read-only schema fingerprint. Never expose VIN/customer values.
+                                    // This lets us compare our association shape with accounts where
+                                    // Connected Car resolves a vehicle_id, without guessing endpoints.
+                                    val associationKeys = association.keys.sorted().joinToString(",")
+                                    val customerPresent = association["customer"]
+                                        ?.jsonPrimitive?.contentOrNull?.isNotBlank() == true
+                                    val vehicleLooksLikeVin = associatedVehicle.length == 17
+                                    val associationCount = associations.size
                                     return@withContext StellantisDiagnosticState(
                                         authentication = StellantisDiagnosticState.Check.OK,
                                         vehicleDiscovery = StellantisDiagnosticState.Check.OK,
                                         vehicleStatus = StellantisDiagnosticState.Check.PENDING,
                                         message = "VIN confirmado. /user=" + userProbe.first +
                                             "; /user/vehicles=40400. " +
-                                            "Diagnóstico: OAuth y asociación funcionan, pero Connected Car no publica " +
-                                            "este vehículo para este cliente. No se intentarán rutas no documentadas."
+                                            "Asociación: count=" + associationCount +
+                                            ", keys=[" + associationKeys + "]" +
+                                            ", customer=" + if (customerPresent) "sí" else "no" +
+                                            ", vehicle17=" + if (vehicleLooksLikeVin) "sí" else "no" +
+                                            ". Valores sensibles ocultos. Solo lectura."
                                     )
                                 }
                             }
