@@ -1,5 +1,6 @@
 package com.ec3control.data.stellantis
 
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -22,8 +23,17 @@ import javax.net.ssl.SSLSocketFactory
 
 data class OtpNetworkResult(val ok:Boolean,val message:String,val session:String?=null)
 
-class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
+class StellantisOtpNetwork(private val context:Context?=null,private val http:OkHttpClient=OkHttpClient()){
+ private val secureStore=context?.let{OtpSecureStore(it.applicationContext)}
+ private var storedPin:String?=null
  private var activeOtp:StellantisOtpActivation?=null
+ init{
+  secureStore?.load()?.let{saved->
+   storedPin=saved.pin
+   activeOtp=StellantisOtpActivation(INWEBO_ACCESS_ID,saved.state.deviceId,restored=saved.state)
+  }
+ }
+ fun hasStoredOtpSession()=activeOtp!=null && storedPin!=null
  suspend fun activate(accessToken:String,smsCode:String,pin:String):OtpNetworkResult=withContext(Dispatchers.IO){
   require(accessToken.length>=16){"OAuth token unavailable"}
   require(smsCode.isNotBlank()){"SMS code required"}
@@ -45,7 +55,9 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    }
    otp.sessionState()
    activeOtp=otp
-   OtpNetworkResult(true,"OTP activado. Preparado para solicitar token RemoteServices.")
+   secureStore?.save(otp.sessionState(),pin)
+   storedPin=pin
+   OtpNetworkResult(true,"OTP activado y sesión guardada cifrada en este teléfono.")
   }catch(e:Exception){
    OtpNetworkResult(false,"Activación OTP: "+(e.message ?: "error desconocido")+". Solicita un código nuevo y vuelve a intentarlo.")
   }
@@ -84,6 +96,10 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
   }catch(_:Exception){
    OtpNetworkResult(false,"No se pudo obtener el token RemoteServices.")
   }
+ }
+ suspend fun requestRemoteServicesTokenStored(accessToken:String,realm:String="clientsB2CCitroen"):OtpNetworkResult{
+  val pin=storedPin ?: return OtpNetworkResult(false,"No hay sesión OTP segura guardada.")
+  return requestRemoteServicesToken(accessToken,pin,realm)
  }
  suspend fun probeMqttReadOnly(oauthToken:String,remoteSession:String,realm:String="clientsB2CCitroen"):OtpNetworkResult=withContext(Dispatchers.IO){
   val remoteParts=remoteSession.split("\u0000")
