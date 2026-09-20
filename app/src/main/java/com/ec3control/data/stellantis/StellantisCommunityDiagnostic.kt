@@ -130,7 +130,16 @@ class SafeStellantisCommunityDiagnostic(
                                                         "item" + (itemIndex + 1) + "{keys=" + keys +
                                                             if (safeLabels.isNotBlank()) "; " + safeLabels + "}" else "}"
                                                     }
-                                                    is JsonPrimitive -> "item" + (itemIndex + 1) + "=primitive"
+                                                    is JsonPrimitive -> {
+                                                        val raw = item.content
+                                                        val safe = when {
+                                                            raw.length == 17 && raw.all { it.isLetterOrDigit() } -> "VIN17_oculto"
+                                                            raw.contains("@") -> "dato_oculto"
+                                                            raw.length > 80 -> "texto(" + raw.length + ")"
+                                                            else -> raw.replace(Regex("[A-HJ-NPR-Z0-9]{17}"), "VIN17_oculto").take(80)
+                                                        }
+                                                        "item" + (itemIndex + 1) + "=" + safe
+                                                    }
                                                     is JsonArray -> "item" + (itemIndex + 1) + "=array(" + item.size + ")"
                                                     else -> "item" + (itemIndex + 1) + "=presente"
                                                 }
