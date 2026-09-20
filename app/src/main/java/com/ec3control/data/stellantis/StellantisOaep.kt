@@ -29,7 +29,16 @@ internal object StellantisOaep {
     /** Mirrors community MyOAEP.decrypt: public exponent operation, then OAEP decode. */
     fun decodePublicOperation(ciphertext:ByteArray, modulus:BigInteger, exponent:BigInteger=BigInteger.valueOf(17)):ByteArray{
         val k=(modulus.bitLength()+7)/8
-        require(ciphertext.size==k){"OAEP ciphertext length"}
+        require(ciphertext.isNotEmpty() && ciphertext.size%k==0){"OAEP ciphertext length"}
+        if(ciphertext.size>k){
+            val out=ArrayList<Byte>()
+            var offset=0
+            while(offset<ciphertext.size){
+                decodePublicOperation(ciphertext.copyOfRange(offset,offset+k),modulus,exponent).forEach{out.add(it)}
+                offset+=k
+            }
+            return out.toByteArray()
+        }
         val em=i2osp(BigInteger(1,ciphertext).modPow(exponent,modulus),k)
         require(em[0].toInt()==0){"OAEP leading byte"}
         val maskedSeed=em.copyOfRange(1,1+HLEN)
