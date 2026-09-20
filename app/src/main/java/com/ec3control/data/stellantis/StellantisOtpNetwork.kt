@@ -13,8 +13,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
 import javax.xml.parsers.DocumentBuilderFactory
+import org.eclipse.paho.client.mqttv3.MqttClient
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import java.util.UUID
 
-data class OtpNetworkResult(val ok:Boolean,val message:String)
+data class OtpNetworkResult(val ok:Boolean,val message:String,val session:String?=null)
 
 class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
  private var activeOtp:StellantisOtpActivation?=null
@@ -72,8 +76,8 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
     val raw=r.body?.string().orEmpty()
     if(!r.isSuccessful) return@withContext OtpNetworkResult(false,"RemoteServices token HTTP "+r.code)
     val obj=Json.parseToJsonElement(raw).jsonObject
-    require(!obj["access_token"]?.jsonPrimitive?.content.isNullOrBlank()){"RemoteServices access token missing"}
-    OtpNetworkResult(true,"Token RemoteServices obtenido. No se ha enviado ninguna orden al vehículo.")
+    val remoteToken=requireNotNull(obj["access_token"]?.jsonPrimitive?.content){"RemoteServices access token missing"}
+    OtpNetworkResult(true,"Token RemoteServices obtenido. No se ha enviado ninguna orden al vehículo.",remoteToken)
    }
   }catch(_:Exception){
    OtpNetworkResult(false,"No se pudo obtener el token RemoteServices.")
