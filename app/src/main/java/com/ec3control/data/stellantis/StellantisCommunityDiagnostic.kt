@@ -96,21 +96,40 @@ class SafeStellantisCommunityDiagnostic(
                                     // This lets us compare our association shape with accounts where
                                     // Connected Car resolves a vehicle_id, without guessing endpoints.
                                     val associationKeys = association.keys.sorted().joinToString(",")
-                                    val customerPresent = association["customer"]
-                                        ?.jsonPrimitive?.contentOrNull?.isNotBlank() == true
-                                    val vehicleLooksLikeVin = associatedVehicle.length == 17
                                     val associationCount = associations.size
+                                    val safeRows = associations.mapIndexed { index, element ->
+                                        val row = element.jsonObject
+                                        fun safeValue(key: String): String {
+                                            val field = row[key] ?: return "ausente"
+                                            return when (field) {
+                                                is JsonPrimitive -> if (field.isString) {
+                                                    when {
+                                                        key == "vehicle" -> if (field.content.length == 17) "VIN17" else "texto"
+                                                        field.content.isBlank() -> "vacío"
+                                                        else -> field.content.take(40)
+                                                    }
+                                                } else field.content.take(40)
+                                                is JsonArray -> "array(" + field.size + ")"
+                                                is JsonObject -> "objeto(keys=" + field.keys.sorted().joinToString(",") + ")"
+                                                else -> "presente"
+                                            }
+                                        }
+                                        "#" + (index + 1) +
+                                            " status=" + safeValue("car_association_status") +
+                                            ", services=" + safeValue("services") +
+                                            ", checks=" + safeValue("validated_checks") +
+                                            ", vehicle=" + safeValue("vehicle") +
+                                            ", customer=" + if (row["customer"] != null) "presente" else "ausente"
+                                    }.joinToString(" | ")
                                     return@withContext StellantisDiagnosticState(
                                         authentication = StellantisDiagnosticState.Check.OK,
                                         vehicleDiscovery = StellantisDiagnosticState.Check.OK,
                                         vehicleStatus = StellantisDiagnosticState.Check.PENDING,
                                         message = "VIN confirmado. /user=" + userProbe.first +
                                             "; /user/vehicles=40400. " +
-                                            "Asociación: count=" + associationCount +
-                                            ", keys=[" + associationKeys + "]" +
-                                            ", customer=" + if (customerPresent) "sí" else "no" +
-                                            ", vehicle17=" + if (vehicleLooksLikeVin) "sí" else "no" +
-                                            ". Valores sensibles ocultos. Solo lectura."
+                                            "Asociaciones=" + associationCount + ". " + safeRows +
+                                            ". keys=[" + associationKeys + "]" +
+                                            ". IDs, VIN y datos personales ocultos. Solo lectura."
                                     )
                                 }
                             }
