@@ -177,11 +177,12 @@ class SafeStellantisCommunityDiagnostic(
                                                 runCatching {
                                                     val obj = json.parseToJsonElement(rawAssociation).jsonObject
                                                     val topKeys = obj.keys.sorted().joinToString(",")
-                                                    val linkKeys = obj["_links"]?.let { links ->
-                                                        runCatching { links.jsonObject.keys.sorted().joinToString(",") }.getOrNull()
-                                                    }
+                                                    val linksElement = obj["_links"]
+                                                    val linkKeys = if (linksElement is JsonObject) {
+                                                        linksElement.keys.sorted().joinToString(",")
+                                                    } else null
                                                     associationResourceShape = "keys=[$topKeys]" +
-                                                        (linkKeys?.let { "; links=[$it]" } ?: "")
+                                                        if (linkKeys != null) "; links=[$linkKeys]" else ""
                                                 }
                                             }
                                         }
