@@ -37,9 +37,11 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
     if(!msSync.ok) return@withContext OtpNetworkResult(false,msSync.message)
     otp.sessionState()
    }
-   otp.sessionState()\n   activeOtp=otp\n   OtpNetworkResult(true,"OTP activado. Preparado para solicitar token RemoteServices.")
-  }catch(_:Exception){
-   OtpNetworkResult(false,"No se pudo completar la activación OTP. Solicita un código nuevo y vuelve a intentarlo.")
+   otp.sessionState()
+   activeOtp=otp
+   OtpNetworkResult(true,"OTP activado. Preparado para solicitar token RemoteServices.")
+  }catch(e:Exception){
+   OtpNetworkResult(false,"Activación OTP: "+(e.message ?: "error desconocido")+". Solicita un código nuevo y vuelve a intentarlo.")
   }
  }
  suspend fun generatePasswordOtp(pin:String):String=withContext(Dispatchers.IO){
