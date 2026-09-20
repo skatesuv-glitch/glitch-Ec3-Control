@@ -9,12 +9,13 @@ import javax.crypto.spec.SecretKeySpec
 internal data class OtpActivationSetup(val kfact:String,val kiw:String,val pinmode:String)
 internal data class OtpActivationResult(val ok:Boolean,val message:String)
 internal data class OtpMsRequest(val params:Map<String,String>,val secId:String,val secVal:String)
-internal data class OtpSessionState(val iwid:String,val iwTsync:String,val iwK1:String,val iwsecid:String,val iwsecval:String)
+internal data class OtpSessionState(val iwid:String,val iwTsync:String,val iwK0:String,val iwK1:String,val iwsecid:String,val iwsecval:String,val iwalea:String,val deviceId:String)
 
 /** Local state for the InWebo activation handshake. Secrets are kept in memory only. */
 internal class StellantisOtpActivation(
     private val macId:String,
     private val deviceId:String,
+    restored:OtpSessionState?=null,
     private val random:SecureRandom=SecureRandom()
 ){
     private val iwalea=ByteArray(16).also(random::nextBytes).toHex()
@@ -30,8 +31,12 @@ internal class StellantisOtpActivation(
     private var iwsecval=""
 
     init {
+        if(restored!=null){
+            iwid=restored.iwid; iwTsync=restored.iwTsync; iwK0=restored.iwK0; iwK1=restored.iwK1; iwsecid=restored.iwsecid; iwsecval=restored.iwsecval
+        }
         // Exact initial IWData fields consumed by load.py/load1xx from DEFAULT_TOKEN.
         // Empty tokens become zero, matching Tokenizer.nextTokenI().
+        if(restored==null){
         val t=DefaultIwTokenizer(DEFAULT_TOKEN)
         t.next()
         iwid=t.next()
@@ -47,6 +52,7 @@ internal class StellantisOtpActivation(
         t.next() // K
         iwK0=t.next()
         iwK1=t.next()
+        }
     }
 
     fun setupParams(smsCode:String)=mapOf(
@@ -125,7 +131,7 @@ internal class StellantisOtpActivation(
 
     fun sessionState():OtpSessionState{
         require(iwid.isNotBlank() && iwK1.isNotBlank() && iwsecid.isNotBlank() && iwsecval.isNotBlank()){"OTP session incomplete"}
-        return OtpSessionState(iwid,iwTsync,iwK1,iwsecid,iwsecval)
+        return OtpSessionState(iwid,iwTsync,iwK0,iwK1,iwsecid,iwsecval,iwalea,deviceId)
     }
 
     fun otpSetupParams()=mapOf(
