@@ -166,12 +166,12 @@ class SafeStellantisCommunityDiagnostic(
                                         .build()
                                     var associationResourceCode: Int? = null
                                     if (!associationId.isNullOrBlank()) {
-                                        val associationResource = http.newCall(
+                                        http.newCall(
                                             Request.Builder().url(associationResourceUrl).apply(headers)
                                                 .header("x-transaction-id", "1234").get().build()
-                                        ).execute()
-                                        associationResourceCode = associationResource.code
-                                        associationResource.close()
+                                        ).execute().use { associationResource ->
+                                            associationResourceCode = associationResource.code
+                                        }
                                     }
 
                                     // Read-only schema fingerprint. Never expose VIN/customer values.
@@ -244,7 +244,7 @@ class SafeStellantisCommunityDiagnostic(
                                             "; statusVIN+endUser=" + endUserCode +
                                             "; statusAssocId=" + (associationIdCode ?: "n/a") +
                                             "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") +
-                                            "; mauvAssocResource=" + (associationResourceCode ?: "n/a") +. " +
+                                            "; mauvAssocResource=" + (associationResourceCode ?: "n/a") + ". " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
