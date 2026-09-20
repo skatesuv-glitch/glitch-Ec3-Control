@@ -165,7 +165,7 @@ class SafeStellantisCommunityDiagnostic(
                                         .addQueryParameter("locale", "es-ES")
                                         .build()
                                     var associationResourceCode: Int? = null
-                                    var associationResourceShape: String? = null
+                                    var associationResourceShape = "n/a"
                                     if (!associationId.isNullOrBlank()) {
                                         http.newCall(
                                             Request.Builder().url(associationResourceUrl).apply(headers)
@@ -258,7 +258,7 @@ class SafeStellantisCommunityDiagnostic(
                                             "; statusAssocId=" + (associationIdCode ?: "n/a") +
                                             "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") +
                                             "; mauvAssocResource=" + (associationResourceCode ?: "n/a") +
-                                            "; mauvShape=" + (associationResourceShape ?: "n/a") + ". " +
+                                            "; mauvShape=" + associationResourceShape + ". " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
