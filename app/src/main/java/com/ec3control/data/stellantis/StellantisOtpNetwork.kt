@@ -83,7 +83,11 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    OtpNetworkResult(false,"No se pudo obtener el token RemoteServices.")
   }
  }
- suspend fun probeMqttReadOnly(oauthToken:String,remoteSession:String,realm:String="clientsB2CCitroen"):OtpNetworkResult=withContext(Dispatchers.IO){\n  val remoteParts=remoteSession.split("\u0000")\n  val remoteToken=remoteParts.firstOrNull().orEmpty()\n  val tokenType=remoteParts.getOrNull(1).orEmpty()\n  val expires=remoteParts.getOrNull(2).orEmpty()
+ suspend fun probeMqttReadOnly(oauthToken:String,remoteSession:String,realm:String="clientsB2CCitroen"):OtpNetworkResult=withContext(Dispatchers.IO){
+  val remoteParts=remoteSession.split("\u0000")
+  val remoteToken=remoteParts.firstOrNull().orEmpty()
+  val tokenType=remoteParts.getOrNull(1).orEmpty()
+  val expires=remoteParts.getOrNull(2).orEmpty()
   var mqtt:MqttClient?=null
   try{
    val associationUrl=HttpUrl.Builder().scheme("https").host("api.groupe-psa.com").addPathSegments("applications/cvs/v4/mauv/car-associations")
