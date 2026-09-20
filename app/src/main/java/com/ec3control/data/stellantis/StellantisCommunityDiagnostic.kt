@@ -226,6 +226,50 @@ class SafeStellantisCommunityDiagnostic(
                                         }
                                     }
 
+                                    // Compare every association through the same MAUV individual resource.
+                                    // Output is deliberately limited to HTTP/status/service shapes, never IDs or VINs.
+                                    val mauvAssociationComparison = associations.mapIndexed { index, element ->
+                                        val row = element.jsonObject
+                                        val rowAssociationId = row["car_association_id"]?.jsonPrimitive?.contentOrNull
+                                        if (rowAssociationId.isNullOrBlank()) {
+                                            "#" + (index + 1) + ":id=absent"
+                                        } else {
+                                            val rowUrl = okhttp3.HttpUrl.Builder()
+                                                .scheme("https")
+                                                .host("api.groupe-psa.com")
+                                                .addPathSegments("applications/cvs/v4/mauv/car-associations")
+                                                .addPathSegment(rowAssociationId)
+                                                .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                                                .addQueryParameter("locale", "es-ES")
+                                                .build()
+                                            http.newCall(
+                                                Request.Builder().url(rowUrl).apply(headers)
+                                                    .header("x-transaction-id", "1234").get().build()
+                                            ).execute().use { response ->
+                                                if (!response.isSuccessful) {
+                                                    "#" + (index + 1) + ":http=" + response.code
+                                                } else {
+                                                    val rawRow = response.body?.string().orEmpty()
+                                                    fun safeScalar(name: String): String {
+                                                        val m = Regex("\\\"" + Regex.escape(name) + "\\\"\\s*:\\s*(?:\\\"([^\\\"]*)\\\"|([^,}\\s]+))").find(rawRow)
+                                                            ?: return "absent"
+                                                        return (m.groupValues.getOrNull(1)?.takeIf { it.isNotEmpty() }
+                                                            ?: m.groupValues.getOrNull(2).orEmpty()).trim().take(32)
+                                                    }
+                                                    val servicesBlock = Regex("\\\"services\\\"\\s*:\\s*\\[([^]]*)\\]").find(rawRow)?.groupValues?.getOrNull(1)
+                                                    val serviceTokens = servicesBlock?.let {
+                                                        Regex("\\\"([A-Za-z0-9_-]{1,24})\\\"").findAll(it)
+                                                            .map { hit -> hit.groupValues[1] }.distinct().take(12).toList()
+                                                    }.orEmpty()
+                                                    "#" + (index + 1) + ":http=200" +
+                                                        ",services=" + if (serviceTokens.isEmpty()) "none" else serviceTokens.joinToString("|") +
+                                                        ",hla=" + safeScalar("hla_status") +
+                                                        ",odo=" + safeScalar("odometer_data_status")
+                                                }
+                                            }
+                                        }
+                                    }.joinToString(" ; ")
+
                                     // Read-only schema fingerprint. Never expose VIN/customer values.
                                     // This lets us compare our association shape with accounts where
                                     // Connected Car resolves a vehicle_id, without guessing endpoints.
@@ -304,6 +348,7 @@ class SafeStellantisCommunityDiagnostic(
                                             "; hlaStatus=" + hlaStatusSafe +
                                             "; odometerStatus=" + odometerStatusSafe +
                                             "; servicesDetail=" + servicesDetailSafe + ". " +
+                                            "MAUV por asociación: " + mauvAssociationComparison + ". " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
