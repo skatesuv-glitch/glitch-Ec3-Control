@@ -100,7 +100,11 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    mqtt.subscribe("psa/RemoteServices/to/cid/"+customer+"/#",0)
    mqtt.subscribe("psa/RemoteServices/events/MPHRTServices/"+vehicle,0)
    OtpNetworkResult(true,"MQTT conectado y suscrito en solo lectura. Cero órdenes publicadas.")
-  }catch(e:Exception){\n   val cause=e.cause?.message\n   val detail=listOfNotNull(e::class.java.simpleName,e.message,cause).filter{it.isNotBlank()}.distinct().joinToString(" | ")\n   OtpNetworkResult(false,"MQTT CONNECT rechazado: "+detail+" · tokenType="+tokenType.ifBlank{"?"}+" · expires="+expires.ifBlank{"?"}+". Token oculto.")\n  }
+  }catch(e:Exception){
+   val cause=e.cause?.message
+   val detail=listOfNotNull(e::class.java.simpleName,e.message,cause).filter{it.isNotBlank()}.distinct().joinToString(" | ")
+   OtpNetworkResult(false,"MQTT CONNECT rechazado: "+detail+" · tokenType="+tokenType.ifBlank{"?"}+" · expires="+expires.ifBlank{"?"}+". Token oculto.")
+  }
   finally{try{if(mqtt?.isConnected==true)mqtt?.disconnect()}catch(_:Exception){};try{mqtt?.close()}catch(_:Exception){}}
  }
  private fun get(params:Map<String,String>,setup:Boolean):Map<String,String>{
