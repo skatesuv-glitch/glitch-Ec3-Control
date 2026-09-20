@@ -56,7 +56,7 @@ internal class StellantisOtpActivation(
 
     fun acceptSetup(xml:Map<String,String>):OtpActivationSetup{
         require(xml["err"]=="OK"){"OTP setup rejected"}
-        kiw=requireNotNull(xml["Kiw"]); kfact=requireNotNull(xml["Kfact"]); pinmode=requireNotNull(xml["pinmode"])
+        val encodedKiw=requireNotNull(xml["Kiw"]); kfact=requireNotNull(xml["Kfact"]); pinmode=requireNotNull(xml["pinmode"])\n        kiw=StellantisOaep.decodePublicOperation(encodedKiw.hexToBytes(),BigInteger(kfact,16)).toHex()
         return OtpActivationSetup(kfact,kiw,pinmode)
     }
 
