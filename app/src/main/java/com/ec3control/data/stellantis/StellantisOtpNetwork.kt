@@ -17,7 +17,6 @@ import javax.xml.parsers.DocumentBuilderFactory
 import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
-import java.util.UUID
 
 data class OtpNetworkResult(val ok:Boolean,val message:String,val session:String?=null)
 
@@ -95,7 +94,7 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
    val association=Json.parseToJsonElement(raw).jsonArray.firstOrNull()?.jsonObject ?: error("association missing")
    val customer=requireNotNull(association["customer"]?.jsonPrimitive?.content){"customer missing"}
    val vehicle=requireNotNull(association["vehicle"]?.jsonPrimitive?.content){"vehicle missing"}
-   mqtt=MqttClient("ssl://mwa.mpsa.com:8885","ec3-read-"+UUID.randomUUID().toString().take(8),MemoryPersistence())
+   mqtt=MqttClient("ssl://mwa.mpsa.com:8885",MqttClient.generateClientId(),MemoryPersistence())
    val options=MqttConnectOptions().apply{isCleanSession=true;keepAliveInterval=120;userName="IMA_OAUTH_ACCESS_TOKEN";password=remoteToken.toCharArray();connectionTimeout=12}
    mqtt.connect(options)
    mqtt.subscribe("psa/RemoteServices/to/cid/"+customer+"/#",0)
