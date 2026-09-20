@@ -92,6 +92,29 @@ class SafeStellantisCommunityDiagnostic(
                                 val associatedVehicle = association
                                     ?.get("vehicle")?.jsonPrimitive?.contentOrNull
                                 if (!associatedVehicle.isNullOrBlank()) {
+                                    val directBase = okhttp3.HttpUrl.Builder()
+                                        .scheme("https")
+                                        .host("api.groupe-psa.com")
+                                        .addPathSegments("connectedcar/v4/user/vehicles/$associatedVehicle/status")
+                                        .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                                        .addQueryParameter("locale", "es-ES")
+                                        .build()
+                                    val normalProbe = http.newCall(Request.Builder().url(directBase).apply(headers).get().build()).execute()
+                                    val normalCode = normalProbe.code
+                                    if (normalProbe.isSuccessful) {
+                                        val raw = normalProbe.body?.string().orEmpty()
+                                        normalProbe.close()
+                                        return@withContext parseReadOnlyStatus(raw, associatedVehicle, "VIN")
+                                    }
+                                    normalProbe.close()
+                                    val endUserProbe = http.newCall(Request.Builder().url(directBase.newBuilder().addQueryParameter("profile", "endUser").build()).apply(headers).get().build()).execute()
+                                    val endUserCode = endUserProbe.code
+                                    if (endUserProbe.isSuccessful) {
+                                        val raw = endUserProbe.body?.string().orEmpty()
+                                        endUserProbe.close()
+                                        return@withContext parseReadOnlyStatus(raw, associatedVehicle, "VIN+endUser")
+                                    }
+                                    endUserProbe.close()
                                     // Read-only schema fingerprint. Never expose VIN/customer values.
                                     // This lets us compare our association shape with accounts where
                                     // Connected Car resolves a vehicle_id, without guessing endpoints.
@@ -157,7 +180,8 @@ class SafeStellantisCommunityDiagnostic(
                                         vehicleDiscovery = StellantisDiagnosticState.Check.OK,
                                         vehicleStatus = StellantisDiagnosticState.Check.PENDING,
                                         message = "VIN confirmado. /user=" + userProbe.first +
-                                            "; /user/vehicles=40400. " +
+                                            "; /user/vehicles=40400; statusVIN=" + normalCode +
+                                            "; statusVIN+endUser=" + endUserCode + ". " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
@@ -305,6 +329,22 @@ class SafeStellantisCommunityDiagnostic(
                 message = "Vehículo asociado encontrado. Estado real recibido en solo lectura."
             )
         }
+    }
+
+    private fun parseReadOnlyStatus(raw: String, vehicleId: String, source: String): StellantisDiagnosticState {
+        val status = Json.parseToJsonElement(raw).jsonObject
+        val energy = (status["energy"] ?: status["energies"])?.jsonArray?.firstOrNull()?.jsonObject
+        val chargeStatus = energy?.get("charging")?.jsonObject?.get("status")?.jsonPrimitive?.contentOrNull
+        return StellantisDiagnosticState(
+            authentication = StellantisDiagnosticState.Check.OK,
+            vehicleDiscovery = StellantisDiagnosticState.Check.OK,
+            vehicleStatus = StellantisDiagnosticState.Check.OK,
+            batteryPercent = energy?.get("level")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()?.toInt(),
+            rangeKm = energy?.get("autonomy")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()?.toInt(),
+            charging = chargeStatus?.equals("InProgress", true),
+            vehicleId = vehicleId,
+            message = "Estado real recibido en solo lectura vía " + source + "."
+        )
     }
 
     private fun safeErrorDetail(raw: String): String? {
