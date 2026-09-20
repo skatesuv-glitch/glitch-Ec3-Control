@@ -24,16 +24,16 @@ class StellantisOtpNetwork(private val http:OkHttpClient=OkHttpClient()){
   require(pin.length==4 && pin.all(Char::isDigit)){"4 digit PIN required"}
   val otp=StellantisOtpActivation(INWEBO_ACCESS_ID,accessToken.take(16))
   try{
-   val setup=get(otp.setupParams(smsCode),true)
-   otp.acceptSetup(setup)
-   val fin=get(otp.finalizeParams(smsCode,pin),false)
-   val first=otp.synchronize(fin,pin)
+   val setup=try{get(otp.setupParams(smsCode),true)}catch(e:Exception){throw IllegalStateException("SETUP: "+(e.message ?: "error"))}
+   try{otp.acceptSetup(setup)}catch(e:Exception){throw IllegalStateException("SETUP-CRYPTO: "+(e.message ?: "error"))}
+   val fin=try{get(otp.finalizeParams(smsCode,pin),false)}catch(e:Exception){throw IllegalStateException("FINALIZE: "+(e.message ?: "error"))}
+   val first=try{otp.synchronize(fin,pin)}catch(e:Exception){throw IllegalStateException("FINALIZE-SYNC: "+(e.message ?: "error"))}
    if(!first.ok) return@withContext OtpNetworkResult(false,first.message)
    val ms=otp.buildMsSync(fin,pin)
    if(ms!=null){
     val wire=ms.params.filterKeys{!it.startsWith("_local_")}
-    val msResponse=get(wire,false)
-    val msSync=otp.acceptMsSync(msResponse,pin,ms)
+    val msResponse=try{get(wire,false)}catch(e:Exception){throw IllegalStateException("MS-SYNC: "+(e.message ?: "error"))}
+    val msSync=try{otp.acceptMsSync(msResponse,pin,ms)}catch(e:Exception){throw IllegalStateException("MS-SYNC-CRYPTO: "+(e.message ?: "error"))}
     if(!msSync.ok) return@withContext OtpNetworkResult(false,msSync.message)
     otp.sessionState()
    }
