@@ -165,12 +165,25 @@ class SafeStellantisCommunityDiagnostic(
                                         .addQueryParameter("locale", "es-ES")
                                         .build()
                                     var associationResourceCode: Int? = null
+                                    var associationResourceShape: String? = null
                                     if (!associationId.isNullOrBlank()) {
                                         http.newCall(
                                             Request.Builder().url(associationResourceUrl).apply(headers)
                                                 .header("x-transaction-id", "1234").get().build()
                                         ).execute().use { associationResource ->
                                             associationResourceCode = associationResource.code
+                                            if (associationResource.isSuccessful) {
+                                                val rawAssociation = associationResource.body?.string().orEmpty()
+                                                runCatching {
+                                                    val obj = json.parseToJsonElement(rawAssociation).jsonObject
+                                                    val topKeys = obj.keys.sorted().joinToString(",")
+                                                    val linkKeys = obj["_links"]?.let { links ->
+                                                        runCatching { links.jsonObject.keys.sorted().joinToString(",") }.getOrNull()
+                                                    }
+                                                    associationResourceShape = "keys=[$topKeys]" +
+                                                        (linkKeys?.let { "; links=[$it]" } ?: "")
+                                                }
+                                            }
                                         }
                                     }
 
@@ -244,7 +257,8 @@ class SafeStellantisCommunityDiagnostic(
                                             "; statusVIN+endUser=" + endUserCode +
                                             "; statusAssocId=" + (associationIdCode ?: "n/a") +
                                             "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") +
-                                            "; mauvAssocResource=" + (associationResourceCode ?: "n/a") + ". " +
+                                            "; mauvAssocResource=" + (associationResourceCode ?: "n/a") +
+                                            "; mauvShape=" + (associationResourceShape ?: "n/a") + ". " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
