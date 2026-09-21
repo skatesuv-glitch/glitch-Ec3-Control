@@ -94,11 +94,37 @@ class StellantisOtpNetwork(private val context:Context?=null,private val http:Ok
     val obj=Json.parseToJsonElement(raw).jsonObject
     val remoteToken=requireNotNull(obj["access_token"]?.jsonPrimitive?.content){"RemoteServices access token missing"}
     val expiresSeconds=obj["expires_in"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-    remoteAccessStore?.save(remoteToken,null,System.currentTimeMillis()+expiresSeconds*1000L)
+    val remoteRefresh=obj["refresh_token"]?.jsonPrimitive?.content
+    remoteAccessStore?.save(remoteToken,remoteRefresh,System.currentTimeMillis()+expiresSeconds*1000L)
     OtpNetworkResult(true,"Token RemoteServices obtenido. No se ha enviado ninguna orden al vehículo.",remoteToken+"\u0000"+(obj["token_type"]?.jsonPrimitive?.content ?: "")+"\u0000"+(obj["expires_in"]?.jsonPrimitive?.content ?: ""))
    }
   }catch(_:Exception){
    OtpNetworkResult(false,"No se pudo obtener el token RemoteServices.")
+  }
+ }
+ suspend fun refreshRemoteServicesToken(accessToken:String,realm:String="clientsB2CCitroen"):OtpNetworkResult=withContext(Dispatchers.IO){
+  try{
+   val stored=remoteAccessStore?.load() ?: return@withContext OtpNetworkResult(false,"No hay sesión RemoteServices guardada.")
+   val refresh=stored.refreshToken?.takeIf{it.isNotBlank()} ?: return@withContext OtpNetworkResult(false,"No hay remote refresh token guardado.")
+   val url=HttpUrl.Builder().scheme("https").host("api.groupe-psa.com")
+    .addPathSegments("connectedcar/v4/virtualkey/remoteaccess/token")
+    .addQueryParameter("client_id",com.ec3control.BuildConfig.CITROEN_CLIENT_ID).addQueryParameter("locale","es-ES").build()
+   val body=buildJsonObject{put("grant_type","refresh_token");put("refresh_token",refresh)}.toString()
+    .toRequestBody("application/json".toMediaType())
+   val req=Request.Builder().url(url).header("Authorization","Bearer $accessToken").header("x-introspect-realm",realm)
+    .header("User-Agent","okhttp/4.8.0").header("Accept","application/hal+json").post(body).build()
+   http.newCall(req).execute().use{r->
+    val raw=r.body?.string().orEmpty()
+    if(!r.isSuccessful) return@withContext OtpNetworkResult(false,"RemoteServices refresh HTTP "+r.code)
+    val obj=Json.parseToJsonElement(raw).jsonObject
+    val remoteToken=requireNotNull(obj["access_token"]?.jsonPrimitive?.content){"RemoteServices access token missing"}
+    val nextRefresh=obj["refresh_token"]?.jsonPrimitive?.content ?: refresh
+    val expiresSeconds=obj["expires_in"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+    remoteAccessStore.save(remoteToken,nextRefresh,System.currentTimeMillis()+expiresSeconds*1000L)
+    OtpNetworkResult(true,"RemoteServices renovado y guardado cifrado. No se ha enviado ninguna orden al vehículo.",remoteToken+"\u0000"+(obj["token_type"]?.jsonPrimitive?.content ?: "")+"\u0000"+(obj["expires_in"]?.jsonPrimitive?.content ?: ""))
+   }
+  }catch(_:Exception){
+   OtpNetworkResult(false,"No se pudo renovar RemoteServices.")
   }
  }
  suspend fun requestRemoteServicesTokenStored(accessToken:String,realm:String="clientsB2CCitroen"):OtpNetworkResult{
