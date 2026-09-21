@@ -114,6 +114,10 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    remoteAccessToken=stored.accessToken
    oauthRefreshPresent=!stored.refreshToken.isNullOrBlank()
    oauthSessionState="Restaurado ✓"
+   state=StellantisDiagnosticState(
+    authentication=StellantisDiagnosticState.Check.OK,
+    message="OAuth restaurado desde almacenamiento cifrado"
+   )
    val provider=oauth
    val refresh=stored.refreshToken
    if(provider!=null && !refresh.isNullOrBlank()){
@@ -123,8 +127,17 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
      remoteAccessToken=renewed.accessToken
      oauthRefreshPresent=!renewed.refreshToken.isNullOrBlank()
      oauthSessionState="Renovado ✓"
-    }catch(_:Exception){
-     oauthSessionState="Restaurado · renovación pendiente"
+     state=StellantisDiagnosticState(
+      authentication=StellantisDiagnosticState.Check.OK,
+      message="OAuth renovado ✓"
+     )
+    }catch(e:Exception){
+     val safe=e.message?.takeIf{it.startsWith("OAuth refresh HTTP ")} ?: "sin código HTTP"
+     oauthSessionState="Restaurado · refresh falló: $safe"
+     state=StellantisDiagnosticState(
+      authentication=StellantisDiagnosticState.Check.OK,
+      message="OAuth restaurado; renovación fallida: $safe"
+     )
      // Keep the encrypted stored session intact. A refresh failure must not
      // trigger login, OTP, SMS, RemoteServices or any vehicle command.
     }
