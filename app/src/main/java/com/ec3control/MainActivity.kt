@@ -16,6 +16,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         consumeOAuthCallback(intent?.data)
+        // The OAuth redirect must be single-use. Otherwise Android can deliver the
+        // previous authorization code again when MainActivity is recreated.
+        intent?.data = null
         setContent {
             Ec3Theme {
                 Ec3App(
@@ -31,6 +34,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeOAuthCallback(intent.data)
+        intent.data = null
     }
 
     private fun consumeOAuthCallback(uri: Uri?) {
