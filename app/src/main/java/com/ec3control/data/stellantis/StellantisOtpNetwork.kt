@@ -35,6 +35,7 @@ class StellantisOtpNetwork(private val context:Context?=null,private val http:Ok
   }
  }
  fun hasStoredOtpSession()=activeOtp!=null && storedPin!=null
+ fun hasStoredRemoteAccessSession()=remoteAccessStore?.hasSession()==true
  suspend fun activate(accessToken:String,smsCode:String,pin:String):OtpNetworkResult=withContext(Dispatchers.IO){
   require(accessToken.length>=16){"OAuth token unavailable"}
   require(smsCode.isNotBlank()){"SMS code required"}
