@@ -38,6 +38,34 @@ class CitroenOAuth(
         .appendQueryParameter("locale", config.locale)
         .build().toString()
 
+    suspend fun refresh(refreshToken: String): CitroenTokens = withContext(Dispatchers.IO) {
+        require(refreshToken.isNotBlank()) { "OAuth refresh token unavailable" }
+        val basic = Base64.getEncoder().encodeToString(
+            (config.clientId + ":" + config.clientSecret).toByteArray(Charsets.UTF_8)
+        )
+        val tokenUrl = Uri.parse(config.oauthBaseUrl + "/access_token").buildUpon()
+            .appendQueryParameter("grant_type", "refresh_token")
+            .appendQueryParameter("refresh_token", refreshToken)
+            .build()
+            .toString()
+        val request = Request.Builder()
+            .url(tokenUrl)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Authorization", "Basic " + basic)
+            .post(okhttp3.RequestBody.create(null, ByteArray(0)))
+            .build()
+        http.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            require(response.isSuccessful) { "OAuth refresh HTTP " + response.code }
+            val json = Json.parseToJsonElement(raw).jsonObject
+            CitroenTokens(
+                accessToken = json["access_token"]?.jsonPrimitive?.content
+                    ?: error("OAuth refresh sin access_token"),
+                refreshToken = json["refresh_token"]?.jsonPrimitive?.content ?: refreshToken
+            )
+        }
+    }
+
     suspend fun exchangeCode(code: String): CitroenTokens = withContext(Dispatchers.IO) {
         val basic = Base64.getEncoder().encodeToString(
             (config.clientId + ":" + config.clientSecret).toByteArray(Charsets.UTF_8)
