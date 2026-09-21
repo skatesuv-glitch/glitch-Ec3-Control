@@ -112,6 +112,19 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   oauthStore.load()?.let{stored->
    remoteAccessToken=stored.accessToken
    oauthRefreshPresent=!stored.refreshToken.isNullOrBlank()
+   val provider=oauth
+   val refresh=stored.refreshToken
+   if(provider!=null && !refresh.isNullOrBlank()){
+    try{
+     val renewed=provider.refresh(refresh)
+     oauthStore.save(renewed.accessToken,renewed.refreshToken)
+     remoteAccessToken=renewed.accessToken
+     oauthRefreshPresent=!renewed.refreshToken.isNullOrBlank()
+    }catch(_:Exception){
+     // Keep the encrypted stored session intact. A refresh failure must not
+     // trigger login, OTP, SMS, RemoteServices or any vehicle command.
+    }
+   }
   }
  }
 
