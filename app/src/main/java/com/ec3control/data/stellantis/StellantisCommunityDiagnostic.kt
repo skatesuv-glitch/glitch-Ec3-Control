@@ -92,13 +92,34 @@ class SafeStellantisCommunityDiagnostic(
                                 val associatedVehicle = association
                                     ?.get("vehicle")?.jsonPrimitive?.contentOrNull
                                 if (!associatedVehicle.isNullOrBlank()) {
-                                    // Known-dead Connected Car /status variants are intentionally skipped.
-                                    // They repeatedly returned 404 on the real account and only delayed MAUV diagnostics.
-                                    val normalCode: Any = "skip-known-404"
-                                    val endUserCode: Any = "skip-known-404"
+                                    // Read-only probes based on the documented/historical Connected Car status shape.
+                                    // No command is sent to the vehicle. Only HTTP result codes are exposed.
+                                    fun statusProbe(extraHeader: String? = null): Any {
+                                        val probeUrl = okhttp3.HttpUrl.Builder()
+                                            .scheme("https")
+                                            .host("api.groupe-psa.com")
+                                            .addPathSegments("connectedcar/v4/user/vehicles")
+                                            .addPathSegment(associatedVehicle)
+                                            .addPathSegment("status")
+                                            .addQueryParameter("extension", "odometer")
+                                            .addQueryParameter("profile", "endUser")
+                                            .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                                            .build()
+                                        return http.newCall(
+                                            Request.Builder().url(probeUrl).apply(headers).apply {
+                                                if (!extraHeader.isNullOrBlank()) header("X-MPHSource", extraHeader)
+                                            }.get().build()
+                                        ).execute().use { it.code }
+                                    }
+                                    val normalCode: Any = statusProbe()
+                                    // Historical API changes required X-MPHSource. Test only conservative
+                                    // non-secret source labels and report status codes, never response bodies.
+                                    val mphSourceAppCode: Any = statusProbe("APP")
+                                    val mphSourceMobileCode: Any = statusProbe("MOBILE")
+                                    val endUserCode: Any = "included"
                                     val associationId = association["car_association_id"]?.jsonPrimitive?.contentOrNull
-                                    val associationIdCode: Any = "skip-known-404"
-                                    val associationIdEndUserCode: Any = "skip-known-404"
+                                    val associationIdCode: Any = "not-used"
+                                    val associationIdEndUserCode: Any = "not-used"
                                     // Probe the MAUV association resource itself. The Connected Car v4
                                     // vehicle/status route returned 404 for both VIN and association UUID,
                                     // so inspect only safe response shape from the association family.
@@ -296,6 +317,8 @@ class SafeStellantisCommunityDiagnostic(
                                         message = "VIN confirmado. /user=" + userProbe.first +
                                             "; /user/vehicles=40400; statusVIN=" + normalCode +
                                             "; statusVIN+endUser=" + endUserCode +
+                                            "; status+X-MPHSource(APP)=" + mphSourceAppCode +
+                                            "; status+X-MPHSource(MOBILE)=" + mphSourceMobileCode +
                                             "; statusAssocId=" + (associationIdCode ?: "n/a") +
                                             "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") +
                                             "; mauvAssocResource=" + (associationResourceCode ?: "n/a") +
