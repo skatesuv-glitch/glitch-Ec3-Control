@@ -92,6 +92,8 @@ class StellantisOtpNetwork(private val context:Context?=null,private val http:Ok
     if(!r.isSuccessful) return@withContext OtpNetworkResult(false,"RemoteServices token HTTP "+r.code)
     val obj=Json.parseToJsonElement(raw).jsonObject
     val remoteToken=requireNotNull(obj["access_token"]?.jsonPrimitive?.content){"RemoteServices access token missing"}
+    val expiresSeconds=obj["expires_in"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+    remoteAccessStore?.save(remoteToken,null,System.currentTimeMillis()+expiresSeconds*1000L)
     OtpNetworkResult(true,"Token RemoteServices obtenido. No se ha enviado ninguna orden al vehículo.",remoteToken+"\u0000"+(obj["token_type"]?.jsonPrimitive?.content ?: "")+"\u0000"+(obj["expires_in"]?.jsonPrimitive?.content ?: ""))
    }
   }catch(_:Exception){
