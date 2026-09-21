@@ -91,6 +91,9 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var manualCode by remember{mutableStateOf("")}
  var remoteProbe by remember{mutableStateOf<RemoteServicesProbe?>(null)}
  var remoteAccessToken by remember{mutableStateOf<String?>(null)}
+ var oauthRefreshPresent by remember{mutableStateOf<Boolean?>(null)}
+ var remoteSessionPresent by remember{mutableStateOf<Boolean?>(null)}
+ var remoteRefreshPresent by remember{mutableStateOf<Boolean?>(null)}
  var smsResult by remember{mutableStateOf<RemoteServicesSmsResult?>(null)}
  var smsBusy by remember{mutableStateOf(false)}
  var smsCode by remember{mutableStateOf("")}
@@ -111,9 +114,11 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   state=try{
    val tokens=provider.exchangeCode(code)
    remoteAccessToken=tokens.accessToken
-   SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus().also {
-    remoteProbe=try{ RemoteServicesReadOnlyProbe().probe(tokens.accessToken) }catch(e:Exception){ RemoteServicesProbe(-1,false,"RemoteServices: "+(e.message?:"error")) }
-   }
+   oauthRefreshPresent=!tokens.refreshToken.isNullOrBlank()
+   remoteSessionPresent=otpNetwork.hasStoredOtpSession()
+   remoteRefreshPresent=false
+   remoteProbe=null
+   SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
   }catch(e:Exception){
    StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth/conexión: "+(e.message?:"error"))
   }
@@ -129,7 +134,11 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
-   Metric("RemoteServices",when{remoteProbe==null->"Pendiente";remoteProbe?.available==true->"Responde ✓";else->"No disponible"})
+   Metric("OAuth access","Presente ✓")
+   Metric("OAuth refresh",when(oauthRefreshPresent){true->"Presente ✓";false->"Ausente";null->"Pendiente"})
+   Metric("Sesión OTP local",when(remoteSessionPresent){true->"Presente ✓";false->"Ausente";null->if(otpNetwork.hasStoredOtpSession())"Presente ✓" else "Ausente"})
+   Metric("Remote refresh",when(remoteRefreshPresent){true->"Presente ✓";false->"No obtenido";null->"Pendiente"})
+   Metric("RemoteServices","Probe activo deshabilitado")
    remoteProbe?.let{ Text(it.message,color=MaterialTheme.colorScheme.onSurfaceVariant) }
    if(remoteProbe?.httpCode==400 && remoteAccessToken!=null){
     Button(
@@ -241,6 +250,11 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
       busy=true
       state=try{
        val tokens=provider.exchangeCode(code)
+       remoteAccessToken=tokens.accessToken
+       oauthRefreshPresent=!tokens.refreshToken.isNullOrBlank()
+       remoteSessionPresent=otpNetwork.hasStoredOtpSession()
+       remoteRefreshPresent=false
+       remoteProbe=null
        SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
       }catch(e:Exception){
        StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth/conexión: "+(e.message?:"error"))
