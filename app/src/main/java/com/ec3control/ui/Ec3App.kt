@@ -191,7 +191,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Metric("Sesión RemoteServices local",if(otpNetwork.hasStoredRemoteAccessSession())"Presente ✓" else "Ausente")
    Metric("RemoteServices","Probe activo deshabilitado")
    remoteProbe?.let{ Text(it.message,color=MaterialTheme.colorScheme.onSurfaceVariant) }
-   if(remoteProbe?.httpCode==400 && remoteAccessToken!=null){
+   if(remoteAccessToken!=null && !otpNetwork.hasStoredOtpSession() && !otpNetwork.hasStoredRemoteAccessSession()){
     Button(
      enabled=!smsBusy,
      onClick={
@@ -204,7 +204,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
      },
      modifier=Modifier.fillMaxWidth()
     ){Text(if(smsBusy)"Solicitando SMS…" else "Solicitar SMS RemoteServices")}
-    Text("El SMS se solicita solo al pulsar este botón. No escribas aquí el código ni tu PIN.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("Activación inicial de RemoteServices. El SMS solo se solicita al pulsar el botón. Después aparecerán aquí los campos para el código SMS y un PIN local de 4 cifras.",color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    smsResult?.let{ Text(it.message,color=if(it.accepted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) }
    if(otpNetwork.hasStoredOtpSession() && remoteAccessToken!=null){
