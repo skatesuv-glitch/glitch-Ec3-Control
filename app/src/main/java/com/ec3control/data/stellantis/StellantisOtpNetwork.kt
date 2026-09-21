@@ -25,6 +25,7 @@ data class OtpNetworkResult(val ok:Boolean,val message:String,val session:String
 
 class StellantisOtpNetwork(private val context:Context?=null,private val http:OkHttpClient=OkHttpClient()){
  private val secureStore=context?.let{OtpSecureStore(it.applicationContext)}
+ private val remoteAccessStore=context?.let{RemoteAccessSecureStore(it.applicationContext)}
  private var storedPin:String?=null
  private var activeOtp:StellantisOtpActivation?=null
  init{
