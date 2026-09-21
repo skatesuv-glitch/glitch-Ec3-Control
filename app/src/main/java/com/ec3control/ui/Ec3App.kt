@@ -191,82 +191,10 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Metric("Sesión RemoteServices local",if(otpNetwork.hasStoredRemoteAccessSession())"Presente ✓" else "Ausente")
    Metric("RemoteServices","Probe activo deshabilitado")
    remoteProbe?.let{ Text(it.message,color=MaterialTheme.colorScheme.onSurfaceVariant) }
-   if(remoteAccessToken!=null && !otpNetwork.hasStoredOtpSession() && !otpNetwork.hasStoredRemoteAccessSession()){
-    Button(
-     enabled=!smsBusy,
-     onClick={
-      val token=remoteAccessToken ?: return@Button
-      scope.launch{
-       smsBusy=true
-       smsResult=try{ RemoteServicesOtpBootstrap().requestSms(token) }catch(e:Exception){ RemoteServicesSmsResult(-1,false,"Solicitud SMS: "+(e.message?:"error")) }
-       smsBusy=false
-      }
-     },
-     modifier=Modifier.fillMaxWidth()
-    ){Text(if(smsBusy)"Solicitando SMS…" else "Solicitar SMS RemoteServices")}
-    Text("Activación inicial de RemoteServices. El SMS solo se solicita al pulsar el botón. Después aparecerán aquí los campos para el código SMS y un PIN local de 4 cifras.",color=MaterialTheme.colorScheme.onSurfaceVariant)
-   }
-   smsResult?.let{ Text(it.message,color=if(it.accepted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) }
-   if(otpNetwork.hasStoredOtpSession() && remoteAccessToken!=null){
-    Button(enabled=!otpBusy,onClick={
-     val token=remoteAccessToken ?: return@Button
-     scope.launch{
-      otpBusy=true
-      val remote=otpNetwork.requestRemoteServicesTokenStored(token)
-      otpResult=if(remote.ok && remote.session!=null) otpNetwork.probeMqttReadOnly(token,remote.session) else remote
-      otpBusy=false
-     }
-    },modifier=Modifier.fillMaxWidth()){Text(if(otpBusy)"Renovando token…" else "Usar activación segura guardada")}
-    Text("Sesión OTP cifrada disponible en este teléfono. No hace falta solicitar otro SMS.",color=MaterialTheme.colorScheme.primary)
-   }
-   if(smsResult?.accepted==true){
-    Text("Activación OTP · solo en este teléfono",style=MaterialTheme.typography.titleMedium)
-    OutlinedTextField(
-     value=smsCode,
-     onValueChange={smsCode=it.filter(Char::isDigit).take(12)},
-     label={Text("Código recibido por SMS")},
-     singleLine=true,
-     visualTransformation=PasswordVisualTransformation(),
-     modifier=Modifier.fillMaxWidth()
-    )
-    OutlinedTextField(
-     value=localPin,
-     onValueChange={localPin=it.filter(Char::isDigit).take(4)},
-     label={Text("Crear PIN de 4 cifras")},
-     singleLine=true,
-     visualTransformation=PasswordVisualTransformation(),
-     modifier=Modifier.fillMaxWidth()
-    )
-    OutlinedTextField(
-     value=localPinConfirm,
-     onValueChange={localPinConfirm=it.filter(Char::isDigit).take(4)},
-     label={Text("Confirmar PIN de 4 cifras")},
-     singleLine=true,
-     visualTransformation=PasswordVisualTransformation(),
-     modifier=Modifier.fillMaxWidth()
-    )
-    val otpFormReady=smsCode.isNotBlank() && localPin.length==4 && localPinConfirm==localPin
-    Button(
-     enabled=otpFormReady && !otpBusy && remoteAccessToken!=null,
-     onClick={
-      val token=remoteAccessToken ?: return@Button
-      val code=smsCode; val pin=localPin
-      scope.launch{
-       otpBusy=true
-       val activation=otpNetwork.activate(token,code,pin)
-       otpResult=if(activation.ok){
-        val remote=otpNetwork.requestRemoteServicesToken(token,pin)
-        if(remote.ok && remote.session!=null) otpNetwork.probeMqttReadOnly(token,remote.session) else remote
-       }else activation
-       smsCode=""; localPin=""; localPinConfirm=""
-       otpBusy=false
-      }
-     },
-     modifier=Modifier.fillMaxWidth()
-    ){Text(if(otpBusy)"Activando RemoteServices…" else if(otpFormReady)"Activar RemoteServices" else "Activar RemoteServices · completa los datos")}
-    otpResult?.let{Text(it.message,color=if(it.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)}
-    Text("El SMS se borra al terminar. La sesión OTP y el PIN se guardan cifrados con Android Keystore únicamente en este teléfono para renovar RemoteServices sin repetir SMS. No se envían órdenes al coche.",color=MaterialTheme.colorScheme.onSurfaceVariant)
-   }
+   HorizontalDivider()
+   Text("Connected Car · solo lectura",style=MaterialTheme.typography.titleMedium)
+   Text("RemoteServices / SMS / OTP quedan fuera de esta prueba. Se mantienen OAuth y MAUV para investigar únicamente telemetría autorizada de lectura.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Metric("Acceso Connected Car","Pendiente de credenciales autorizadas")
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
    if(oauthError!=null) Text("OAuth: $oauthError",color=MaterialTheme.colorScheme.error)
