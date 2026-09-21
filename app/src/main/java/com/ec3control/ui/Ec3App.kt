@@ -118,9 +118,18 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    remoteSessionPresent=otpNetwork.hasStoredOtpSession()
    remoteRefreshPresent=false
    remoteProbe=null
-   SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+   try{
+    SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+   }catch(e:Exception){
+    StellantisDiagnosticState(
+     authentication=StellantisDiagnosticState.Check.OK,
+     vehicleDiscovery=StellantisDiagnosticState.Check.PENDING,
+     vehicleStatus=StellantisDiagnosticState.Check.PENDING,
+     message="OAuth OK. Diagnóstico posterior: "+(e.message?:"error")
+    )
+   }
   }catch(e:Exception){
-   StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth/conexión: "+(e.message?:"error"))
+   StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth: "+(e.message?:"error"))
   }
   busy=false
   clearOAuthResult()
@@ -255,9 +264,18 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
        remoteSessionPresent=otpNetwork.hasStoredOtpSession()
        remoteRefreshPresent=false
        remoteProbe=null
-       SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+       try{
+        SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+       }catch(e:Exception){
+        StellantisDiagnosticState(
+         authentication=StellantisDiagnosticState.Check.OK,
+         vehicleDiscovery=StellantisDiagnosticState.Check.PENDING,
+         vehicleStatus=StellantisDiagnosticState.Check.PENDING,
+         message="OAuth OK. Diagnóstico posterior: "+(e.message?:"error")
+        )
+       }
       }catch(e:Exception){
-       StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth/conexión: "+(e.message?:"error"))
+       StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth: "+(e.message?:"error"))
       }
       busy=false
      }
