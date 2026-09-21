@@ -102,10 +102,18 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var otpBusy by remember{mutableStateOf(false)}
  var otpResult by remember{mutableStateOf<OtpNetworkResult?>(null)}
  val otpNetwork=remember(context){StellantisOtpNetwork(context.applicationContext)}
+ val oauthStore=remember(context){OAuthSecureStore(context.applicationContext)}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
  val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
  val oauth=remember(clientId,clientSecret){ if(configured) CitroenOAuth(CitroenOAuthConfig(clientId,clientSecret)) else null }
+
+ LaunchedEffect(Unit){
+  oauthStore.load()?.let{stored->
+   remoteAccessToken=stored.accessToken
+   oauthRefreshPresent=!stored.refreshToken.isNullOrBlank()
+  }
+ }
 
  LaunchedEffect(oauthCode){
   val code=oauthCode ?: return@LaunchedEffect
@@ -113,6 +121,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   busy=true
   state=try{
    val tokens=provider.exchangeCode(code)
+   oauthStore.save(tokens.accessToken,tokens.refreshToken)
    remoteAccessToken=tokens.accessToken
    oauthRefreshPresent=!tokens.refreshToken.isNullOrBlank()
    remoteSessionPresent=otpNetwork.hasStoredOtpSession()
