@@ -92,6 +92,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var remoteProbe by remember{mutableStateOf<RemoteServicesProbe?>(null)}
  var remoteAccessToken by remember{mutableStateOf<String?>(null)}
  var oauthRefreshPresent by remember{mutableStateOf<Boolean?>(null)}
+ var oauthSessionState by remember{mutableStateOf("Sin sesión local")}
  var remoteSessionPresent by remember{mutableStateOf<Boolean?>(null)}
  var remoteRefreshPresent by remember{mutableStateOf<Boolean?>(null)}
  var smsResult by remember{mutableStateOf<RemoteServicesSmsResult?>(null)}
@@ -112,6 +113,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   oauthStore.load()?.let{stored->
    remoteAccessToken=stored.accessToken
    oauthRefreshPresent=!stored.refreshToken.isNullOrBlank()
+   oauthSessionState="Restaurado ✓"
    val provider=oauth
    val refresh=stored.refreshToken
    if(provider!=null && !refresh.isNullOrBlank()){
@@ -120,7 +122,9 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
      oauthStore.save(renewed.accessToken,renewed.refreshToken)
      remoteAccessToken=renewed.accessToken
      oauthRefreshPresent=!renewed.refreshToken.isNullOrBlank()
+     oauthSessionState="Renovado ✓"
     }catch(_:Exception){
+     oauthSessionState="Restaurado · renovación pendiente"
      // Keep the encrypted stored session intact. A refresh failure must not
      // trigger login, OTP, SMS, RemoteServices or any vehicle command.
     }
@@ -135,6 +139,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   state=try{
    val tokens=provider.exchangeCode(code)
    oauthStore.save(tokens.accessToken,tokens.refreshToken)
+   oauthSessionState="Guardado ✓"
    remoteAccessToken=tokens.accessToken
    oauthRefreshPresent=!tokens.refreshToken.isNullOrBlank()
    remoteSessionPresent=otpNetwork.hasStoredOtpSession()
@@ -167,6 +172,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("OAuth access","Presente ✓")
    Metric("OAuth refresh",when(oauthRefreshPresent){true->"Presente ✓";false->"Ausente";null->"Pendiente"})
+   Metric("Sesión OAuth local",oauthSessionState)
    Metric("Sesión OTP local",when(remoteSessionPresent){true->"Presente ✓";false->"Ausente";null->if(otpNetwork.hasStoredOtpSession())"Presente ✓" else "Ausente"})
    Metric("Remote refresh",when(remoteRefreshPresent){true->"Presente ✓";false->"No obtenido";null->"Pendiente"})
    Metric("Sesión RemoteServices local",if(otpNetwork.hasStoredRemoteAccessSession())"Presente ✓" else "Ausente")
