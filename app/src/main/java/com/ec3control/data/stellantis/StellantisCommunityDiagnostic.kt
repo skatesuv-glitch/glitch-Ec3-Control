@@ -331,6 +331,18 @@ class SafeStellantisCommunityDiagnostic(
                                             ", customer=" + when (val customer = row["customer"]) { is JsonObject -> "objeto(keys=" + customer.keys.sorted().joinToString(",") + ")"; is JsonPrimitive -> "presente"; else -> if (customer != null) "presente" else "ausente" } +
                                             ", assocId=" + when (val assoc = row["car_association_id"]) { is JsonPrimitive -> "presente(len=" + assoc.content.length + ")"; else -> if (assoc != null) "presente" else "ausente" }
                                     }.joinToString(" | ")
+                                    val customerReferencePresent = associations.any { row ->
+                                        val value = row.jsonObject["customer"]
+                                        value != null && value !is JsonNull &&
+                                            (!(value is JsonPrimitive) || value.contentOrNull?.isNotBlank() == true)
+                                    }
+                                    val remoteMetadataKeys = listOf(
+                                        "qr_code_otp", "qr_code_otp_date", "hla_status",
+                                        "hla_init_date", "notification_url"
+                                    )
+                                    val remoteMetadataPresent = remoteMetadataKeys.filter { key ->
+                                        associations.any { row -> row.jsonObject[key] != null && row.jsonObject[key] !is JsonNull }
+                                    }
                                     return@withContext StellantisDiagnosticState(
                                         authentication = StellantisDiagnosticState.Check.OK,
                                         vehicleDiscovery = StellantisDiagnosticState.Check.OK,
@@ -349,6 +361,8 @@ class SafeStellantisCommunityDiagnostic(
                                             "; odometerStatus=" + odometerStatusSafe +
                                             "; servicesDetail=" + servicesDetailSafe + ". " +
                                             "MAUV por asociación: " + mauvAssociationComparison + ". " +
+                                            "customerRef=" + if (customerReferencePresent) "presente" else "ausente" +
+                                            "; remoteMetadata=[" + if (remoteMetadataPresent.isEmpty()) "ninguno" else remoteMetadataPresent.joinToString(",") + "]. " +
                                             "Asociaciones=" + associationCount + ". " + safeRows +
                                             ". keys=[" + associationKeys + "]" +
                                             ". IDs, VIN y datos personales ocultos. Solo lectura."
