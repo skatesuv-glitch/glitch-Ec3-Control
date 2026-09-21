@@ -129,7 +129,7 @@ class StellantisOtpNetwork(private val context:Context?=null,private val http:Ok
    val connack=readMqttPacket(input)
    if(connack.first!=0x20 || connack.second.size<2) error("CONNACK inválido")
    val connackCode=connack.second[1].toInt() and 0xff
-   if(connackCode!=0) error("CONNACK código "+connackCode)
+   if(connackCode!=0) error("CONNACK código "+connackCode+" ("+mqttConnackMeaning(connackCode)+")")
    mqttSubscribe(output,1,"psa/RemoteServices/to/cid/"+customer+"/#")
    requireSubAck(input,1)
    mqttSubscribe(output,2,"psa/RemoteServices/events/MPHRTServices/"+vehicle)
@@ -141,9 +141,18 @@ class StellantisOtpNetwork(private val context:Context?=null,private val http:Ok
    OtpNetworkResult(false,"MQTT ZERO-ID: "+detail+" · tokenType="+tokenType.ifBlank{"?"}+" · expires="+expires.ifBlank{"?"}+". Token oculto.")
   }finally{try{socket?.close()}catch(_:Exception){}}
  }
+ private fun mqttConnackMeaning(code:Int)=when(code){
+  0->"accepted"
+  1->"unacceptable protocol version"
+  2->"identifier rejected"
+  3->"server unavailable"
+  4->"bad username/password"
+  5->"not authorized"
+  else->"unknown"
+ }
  private fun mqttConnectPacket(token:String):ByteArray{
   val vh=ByteArrayOutputStream();val d=DataOutputStream(vh)
-  mqttUtf(d,"MQTT");d.writeByte(4);d.writeByte(0xC2);d.writeShort(120)
+  mqttUtf(d,"MQTT");d.writeByte(4);d.writeByte(0xC2);d.writeShort(60)
   mqttUtf(d,"");mqttUtf(d,"IMA_OAUTH_ACCESS_TOKEN");mqttUtf(d,token);d.flush()
   return mqttPacket(0x10,vh.toByteArray())
  }
