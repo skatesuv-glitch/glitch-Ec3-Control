@@ -147,6 +147,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Metric("OAuth refresh",when(oauthRefreshPresent){true->"Presente ✓";false->"Ausente";null->"Pendiente"})
    Metric("Sesión OTP local",when(remoteSessionPresent){true->"Presente ✓";false->"Ausente";null->if(otpNetwork.hasStoredOtpSession())"Presente ✓" else "Ausente"})
    Metric("Remote refresh",when(remoteRefreshPresent){true->"Presente ✓";false->"No obtenido";null->"Pendiente"})
+   Metric("Sesión RemoteServices local",if(otpNetwork.hasStoredRemoteAccessSession())"Presente ✓" else "Ausente")
    Metric("RemoteServices","Probe activo deshabilitado")
    remoteProbe?.let{ Text(it.message,color=MaterialTheme.colorScheme.onSurfaceVariant) }
    if(remoteProbe?.httpCode==400 && remoteAccessToken!=null){
