@@ -112,6 +112,25 @@ class SafeStellantisCommunityDiagnostic(
                                         ).execute().use { it.code }
                                     }
                                     val normalCode: Any = statusProbe()
+
+                                    // Historical read-only vehicle resources exposed alongside /status.
+                                    // Probe only HTTP codes. Never display telemetry or location response bodies.
+                                    fun vehicleReadOnlyProbe(resource: String): Int {
+                                        val probeUrl = okhttp3.HttpUrl.Builder()
+                                            .scheme("https")
+                                            .host("api.groupe-psa.com")
+                                            .addPathSegments("connectedcar/v4/user/vehicles")
+                                            .addPathSegment(associatedVehicle)
+                                            .addPathSegment(resource)
+                                            .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                                            .addQueryParameter("locale", "es-ES")
+                                            .build()
+                                        return http.newCall(
+                                            Request.Builder().url(probeUrl).apply(headers).get().build()
+                                        ).execute().use { it.code }
+                                    }
+                                    val telemetryCode = vehicleReadOnlyProbe("telemetry")
+                                    val lastPositionCode = vehicleReadOnlyProbe("lastPosition")
                                     // Historical API changes required X-MPHSource. Test only conservative
                                     // non-secret source labels and report status codes, never response bodies.
                                     val mphSourceAppCode: Any = statusProbe("APP")
@@ -319,6 +338,8 @@ class SafeStellantisCommunityDiagnostic(
                                             "; statusVIN+endUser=" + endUserCode +
                                             "; status+X-MPHSource(APP)=" + mphSourceAppCode +
                                             "; status+X-MPHSource(MOBILE)=" + mphSourceMobileCode +
+                                            "; telemetryVIN=" + telemetryCode +
+                                            "; lastPositionVIN=" + lastPositionCode +
                                             "; statusAssocId=" + (associationIdCode ?: "n/a") +
                                             "; statusAssocId+endUser=" + (associationIdEndUserCode ?: "n/a") +
                                             "; mauvAssocResource=" + (associationResourceCode ?: "n/a") +
