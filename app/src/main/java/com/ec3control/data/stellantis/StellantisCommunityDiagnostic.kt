@@ -113,6 +113,30 @@ class SafeStellantisCommunityDiagnostic(
                                     }
                                     val normalCode: Any = statusProbe()
 
+                                    // Exact read-only status form observed working in 2026:
+                                    // only client_id + locale, no profile/extension. Probe every MAUV VIN
+                                    // because association ordering is not stable. Never expose VIN values.
+                                    val cleanStatusByAssociation = associations.mapIndexed { index, element ->
+                                        val candidateVehicle = element.jsonObject["vehicle"]?.jsonPrimitive?.contentOrNull
+                                        if (candidateVehicle.isNullOrBlank()) {
+                                            "#" + (index + 1) + "=no-vin"
+                                        } else {
+                                            val cleanStatusUrl = okhttp3.HttpUrl.Builder()
+                                                .scheme("https")
+                                                .host("api.groupe-psa.com")
+                                                .addPathSegments("connectedcar/v4/user/vehicles")
+                                                .addPathSegment(candidateVehicle)
+                                                .addPathSegment("status")
+                                                .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                                                .addQueryParameter("locale", "es-ES")
+                                                .build()
+                                            val code = http.newCall(
+                                                Request.Builder().url(cleanStatusUrl).apply(headers).get().build()
+                                            ).execute().use { it.code }
+                                            "#" + (index + 1) + "=" + code
+                                        }
+                                    }.joinToString(",")
+
                                     // Historical read-only vehicle resources exposed alongside /status.
                                     // Probe only HTTP codes. Never display telemetry or location response bodies.
                                     fun vehicleReadOnlyProbe(resource: String): Int {
@@ -351,6 +375,7 @@ class SafeStellantisCommunityDiagnostic(
                                         vehicleStatus = StellantisDiagnosticState.Check.PENDING,
                                         message = "VIN confirmado. /user=" + userProbe.first +
                                             "; /user/vehicles=40400; statusVIN=" + normalCode +
+                                            "; cleanStatusAll=[" + cleanStatusByAssociation + "]" +
                                             "; statusVIN+endUser=" + endUserCode +
                                             "; status+X-MPHSource(APP)=" + mphSourceAppCode +
                                             "; status+X-MPHSource(MOBILE)=" + mphSourceMobileCode +
