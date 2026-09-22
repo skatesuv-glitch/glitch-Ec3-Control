@@ -130,7 +130,23 @@ class SafeStellantisCommunityDiagnostic(
                                         ).execute().use { it.code }
                                     }
                                     val telemetryCode = vehicleReadOnlyProbe("telemetry")
-                                    val lastPositionCode = vehicleReadOnlyProbe("lastPosition")
+
+                                    // lastPosition has a different representation contract in the PSA API:
+                                    // Accept application/vnd.geo+json, with no locale query parameter.
+                                    // Only expose the HTTP code, never coordinates or the response body.
+                                    val lastPositionUrl = okhttp3.HttpUrl.Builder()
+                                        .scheme("https")
+                                        .host("api.groupe-psa.com")
+                                        .addPathSegments("connectedcar/v4/user/vehicles")
+                                        .addPathSegment(associatedVehicle)
+                                        .addPathSegment("lastPosition")
+                                        .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                                        .build()
+                                    val lastPositionCode = http.newCall(
+                                        Request.Builder().url(lastPositionUrl).apply(headers)
+                                            .header("Accept", "application/vnd.geo+json")
+                                            .get().build()
+                                    ).execute().use { it.code }
                                     // Historical API changes required X-MPHSource. Test only conservative
                                     // non-secret source labels and report status codes, never response bodies.
                                     val mphSourceAppCode: Any = statusProbe("APP")
