@@ -60,6 +60,25 @@ class SafeStellantisCommunityDiagnostic(
                 Pair(probe.code, safeErrorDetail(raw))
             }
 
+            // Official B2C v4 endpoint probe. Stellantis documents this host as mTLS-only.
+            // We intentionally provide NO client certificate here. The result safely tells us
+            // whether the TLS gateway rejects a normal MyCitroen OAuth session before HTTP.
+            val apiCertProbe = try {
+                val apiCertUrl = okhttp3.HttpUrl.Builder()
+                    .scheme("https")
+                    .host("api-cert.groupe-psa.com")
+                    .addPathSegments("connectedcar/v4/user")
+                    .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
+                    .build()
+                http.newCall(
+                    Request.Builder().url(apiCertUrl).apply(headers).get().build()
+                ).execute().use { "HTTP " + it.code }
+            } catch (e: javax.net.ssl.SSLException) {
+                "TLS_CLIENT_CERT_REQUIRED"
+            } catch (e: Exception) {
+                "NETWORK_" + e::class.java.simpleName
+            }
+
             val vehiclesRequestUrl = okhttp3.HttpUrl.Builder()
                 .scheme("https")
                 .host("api.groupe-psa.com")
@@ -373,7 +392,7 @@ class SafeStellantisCommunityDiagnostic(
                                         authentication = StellantisDiagnosticState.Check.OK,
                                         vehicleDiscovery = StellantisDiagnosticState.Check.OK,
                                         vehicleStatus = StellantisDiagnosticState.Check.PENDING,
-                                        message = "VIN confirmado. /user=" + userProbe.first +
+                                        message = "VIN confirmado. apiCert=" + apiCertProbe + "; /user=" + userProbe.first +
                                             "; /user/vehicles=40400; statusVIN=" + normalCode +
                                             "; cleanStatusAll=[" + cleanStatusByAssociation + "]" +
                                             "; statusVIN+endUser=" + endUserCode +
