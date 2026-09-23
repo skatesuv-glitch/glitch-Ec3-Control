@@ -1,4 +1,6 @@
 package com.ec3control.ui
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -7,20 +9,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.ec3control.BuildConfig
+import com.ec3control.CitroenOAuthActivity
 import com.ec3control.core.model.VehicleSnapshot
 import com.ec3control.data.demo.DemoVehicleGateway
+import com.ec3control.data.stellantis.*
+import androidx.compose.ui.platform.LocalContext
 import com.ec3control.core.vehicle.VehicleGateway
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
-private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHARGE("Carga"),CLIMATE("Clima"),VEHICLE("Vehículo")}
+private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHARGE("Carga"),CLIMATE("Clima"),VEHICLE("Vehículo"),DIAGNOSTIC("Prueba")}
 
-@Composable fun Ec3App(gateway: VehicleGateway = remember { DemoVehicleGateway() }){
+@Composable fun Ec3App(gateway: VehicleGateway = remember { DemoVehicleGateway() }, oauthCode:String?=null, oauthError:String?=null, clearOAuthResult:()->Unit={}){
  var tab by remember{mutableStateOf(Tab.HOME)}
  var snapshot by remember{mutableStateOf<VehicleSnapshot?>(null)}
  LaunchedEffect(Unit){snapshot=gateway.getVehicle()}
- Scaffold(bottomBar={NavigationBar{Tab.entries.forEach{item->NavigationBarItem(selected=tab==item,onClick={tab=item},icon={Text(when(item){Tab.HOME->"⌂";Tab.BATTERY->"▣";Tab.CHARGE->"⚡";Tab.CLIMATE->"❄";Tab.VEHICLE->"●"})},label={Text(item.label)})}}}){padding->
+ Scaffold(bottomBar={NavigationBar{Tab.entries.forEach{item->NavigationBarItem(selected=tab==item,onClick={tab=item},icon={Text(when(item){Tab.HOME->"⌂";Tab.BATTERY->"▣";Tab.CHARGE->"⚡";Tab.CLIMATE->"❄";Tab.VEHICLE->"●";Tab.DIAGNOSTIC->"↔"})},label={Text(item.label)})}}}){padding->
   val mod=Modifier.padding(padding)
   when(tab){
    Tab.HOME->HomeScreen(gateway,snapshot,{snapshot=it},mod)
@@ -28,6 +35,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Tab.CHARGE->ChargeScreen(gateway,snapshot,{snapshot=it},mod)
    Tab.CLIMATE->ClimateScreen(gateway,snapshot,{snapshot=it},mod)
    Tab.VEHICLE->VehicleScreen(snapshot,mod)
+   Tab.DIAGNOSTIC->DiagnosticScreen(oauthCode,oauthError,clearOAuthResult,mod)
   }
  }
 }
@@ -73,3 +81,179 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
 }
 
 @Composable private fun Metric(label:String,value:String){Column{Text(label,style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);Text(value,style=MaterialTheme.typography.titleMedium)}}
+
+
+@Composable private fun DiagnosticScreen(oauthCode:String?,oauthError:String?,clearOAuthResult:()->Unit,modifier:Modifier=Modifier){
+ val context=LocalContext.current
+ val scope=rememberCoroutineScope()
+ var state by remember{mutableStateOf(StellantisDiagnosticState())}
+ var busy by remember{mutableStateOf(false)}
+ var manualCode by remember{mutableStateOf("")}
+ var remoteProbe by remember{mutableStateOf<RemoteServicesProbe?>(null)}
+ var remoteAccessToken by remember{mutableStateOf<String?>(null)}
+ var oauthRefreshPresent by remember{mutableStateOf<Boolean?>(null)}
+ var oauthSessionState by remember{mutableStateOf("Sin sesión local")}
+ var remoteSessionPresent by remember{mutableStateOf<Boolean?>(null)}
+ var remoteRefreshPresent by remember{mutableStateOf<Boolean?>(null)}
+ var smsResult by remember{mutableStateOf<RemoteServicesSmsResult?>(null)}
+ var smsBusy by remember{mutableStateOf(false)}
+ var smsCode by remember{mutableStateOf("")}
+ var localPin by remember{mutableStateOf("")}
+ var localPinConfirm by remember{mutableStateOf("")}
+ var otpBusy by remember{mutableStateOf(false)}
+ var otpResult by remember{mutableStateOf<OtpNetworkResult?>(null)}
+ val otpNetwork=remember(context){StellantisOtpNetwork(context.applicationContext)}
+ val oauthStore=remember(context){OAuthSecureStore(context.applicationContext)}
+ val clientId=BuildConfig.CITROEN_CLIENT_ID
+ val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
+ val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
+ val oauth=remember(clientId,clientSecret){ if(configured) CitroenOAuth(CitroenOAuthConfig(clientId,clientSecret)) else null }
+
+ LaunchedEffect(Unit){
+  oauthStore.load()?.let{stored->
+   remoteAccessToken=stored.accessToken
+   oauthRefreshPresent=!stored.refreshToken.isNullOrBlank()
+   oauthSessionState="Restaurado ✓"
+   state=StellantisDiagnosticState(
+    authentication=StellantisDiagnosticState.Check.OK,
+    message="OAuth restaurado desde almacenamiento cifrado"
+   )
+   val provider=oauth
+   val refresh=stored.refreshToken
+   if(provider!=null && !refresh.isNullOrBlank()){
+    try{
+     val renewed=provider.refresh(refresh)
+     oauthStore.save(renewed.accessToken,renewed.refreshToken)
+     remoteAccessToken=renewed.accessToken
+     oauthRefreshPresent=!renewed.refreshToken.isNullOrBlank()
+     oauthSessionState="Renovado ✓"
+     state=StellantisDiagnosticState(
+      authentication=StellantisDiagnosticState.Check.OK,
+      message="OAuth renovado ✓"
+     )
+    }catch(e:Exception){
+     val safe=e.message?.takeIf{it.startsWith("OAuth refresh HTTP ")} ?: "sin código HTTP"
+     oauthSessionState="Restaurado · refresh falló: $safe"
+     state=StellantisDiagnosticState(
+      authentication=StellantisDiagnosticState.Check.OK,
+      message="OAuth restaurado; renovación fallida: $safe"
+     )
+     // Keep the encrypted stored session intact. A refresh failure must not
+     // trigger login, OTP, SMS, RemoteServices or any vehicle command.
+    }
+   }
+  }
+ }
+
+ LaunchedEffect(oauthCode){
+  val code=oauthCode ?: return@LaunchedEffect
+  val provider=oauth ?: return@LaunchedEffect
+  busy=true
+  state=try{
+   val tokens=provider.exchangeCode(code)
+   oauthStore.save(tokens.accessToken,tokens.refreshToken)
+   oauthSessionState="Guardado ✓"
+   remoteAccessToken=tokens.accessToken
+   oauthRefreshPresent=!tokens.refreshToken.isNullOrBlank()
+   remoteSessionPresent=otpNetwork.hasStoredOtpSession()
+   remoteRefreshPresent=false
+   remoteProbe=null
+   try{
+    SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+   }catch(e:Exception){
+    StellantisDiagnosticState(
+     authentication=StellantisDiagnosticState.Check.OK,
+     vehicleDiscovery=StellantisDiagnosticState.Check.PENDING,
+     vehicleStatus=StellantisDiagnosticState.Check.PENDING,
+     message="OAuth OK. Diagnóstico posterior: "+(e.message?:"error")
+    )
+   }
+  }catch(e:Exception){
+   StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth: "+(e.message?:"error"))
+  }
+  busy=false
+  clearOAuthResult()
+ }
+
+ Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
+  Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
+  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+   Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
+   Text("C3-Control · ASSOCIATION-ID PROBE · 97F865E",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
+   Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
+   Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
+   Metric("OAuth access","Presente ✓")
+   Metric("OAuth refresh",when(oauthRefreshPresent){true->"Presente ✓";false->"Ausente";null->"Pendiente"})
+   Metric("Sesión OAuth local",oauthSessionState)
+   Metric("Sesión OTP local",when(remoteSessionPresent){true->"Presente ✓";false->"Ausente";null->if(otpNetwork.hasStoredOtpSession())"Presente ✓" else "Ausente"})
+   Metric("Remote refresh",when(remoteRefreshPresent){true->"Presente ✓";false->"No obtenido";null->"Pendiente"})
+   Metric("Sesión RemoteServices local",if(otpNetwork.hasStoredRemoteAccessSession())"Presente ✓" else "Ausente")
+   Metric("RemoteServices","Probe activo deshabilitado")
+   remoteProbe?.let{ Text(it.message,color=MaterialTheme.colorScheme.onSurfaceVariant) }
+   HorizontalDivider()
+   Text("Connected Car · solo lectura",style=MaterialTheme.typography.titleMedium)
+   Text("RemoteServices / SMS / OTP quedan fuera de esta prueba. Se mantienen OAuth y MAUV para investigar únicamente telemetría autorizada de lectura.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Metric("Acceso Connected Car","Pendiente de credenciales autorizadas")
+   state.batteryPercent?.let{Metric("Batería real","$it %")}
+   state.rangeKm?.let{Metric("Autonomía","$it km")}
+   if(oauthError!=null) Text("OAuth: $oauthError",color=MaterialTheme.colorScheme.error)
+   Text(state.message,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Button(
+    enabled=configured&&!busy,
+    onClick={
+     val url=oauth?.authorizationUrl() ?: return@Button
+     context.startActivity(Intent(context,CitroenOAuthActivity::class.java).putExtra(CitroenOAuthActivity.EXTRA_URL,url))
+    },
+    modifier=Modifier.fillMaxWidth()
+   ){Text(if(busy)"Conectando…" else "Conectar con MyCitroën")}
+   if(!configured) Text("Faltan credenciales de aplicación MyCitroën en la compilación.",color=MaterialTheme.colorScheme.error)
+   HorizontalDivider()
+   Text("Plan B · código OAuth",style=MaterialTheme.typography.titleMedium)
+   Text("Si Citroën no vuelve automáticamente a eC3 Control, pega aquí únicamente el código OAuth de tu propia sesión. No pegues correo, contraseña, PIN ni SMS.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   OutlinedTextField(
+    value=manualCode,
+    onValueChange={manualCode=it.trim()},
+    label={Text("Código OAuth")},
+    singleLine=true,
+    visualTransformation=PasswordVisualTransformation(),
+    modifier=Modifier.fillMaxWidth()
+   )
+   Button(
+    enabled=configured&&!busy&&manualCode.isNotBlank(),
+    onClick={
+     val provider=oauth ?: return@Button
+     val code=manualCode
+     manualCode=""
+     scope.launch{
+      busy=true
+      state=try{
+       val tokens=provider.exchangeCode(code)
+       remoteAccessToken=tokens.accessToken
+       oauthRefreshPresent=!tokens.refreshToken.isNullOrBlank()
+       remoteSessionPresent=otpNetwork.hasStoredOtpSession()
+       remoteRefreshPresent=false
+       remoteProbe=null
+       try{
+        SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+       }catch(e:Exception){
+        StellantisDiagnosticState(
+         authentication=StellantisDiagnosticState.Check.OK,
+         vehicleDiscovery=StellantisDiagnosticState.Check.PENDING,
+         vehicleStatus=StellantisDiagnosticState.Check.PENDING,
+         message="OAuth OK. Diagnóstico posterior: "+(e.message?:"error")
+        )
+       }
+      }catch(e:Exception){
+       StellantisDiagnosticState(authentication=StellantisDiagnosticState.Check.ERROR,message="OAuth: "+(e.message?:"error"))
+      }
+      busy=false
+     }
+    },
+    modifier=Modifier.fillMaxWidth()
+   ){Text(if(busy)"Conectando…" else "Usar código OAuth")}
+   Text("El código se mantiene solo en memoria durante esta prueba y se borra del campo al usarlo.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Text("No se envían órdenes al coche.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+  }}
+ }
+}

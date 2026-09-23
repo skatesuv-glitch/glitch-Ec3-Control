@@ -2,6 +2,8 @@ name: Android Build
 
 on:
   push:
+    branches: [ main, experiment/stellantis-community ]
+  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
@@ -18,7 +20,22 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Run tests and build debug APK
-        run: gradle testDebugUnitTest assembleDebug
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF}" = "refs/heads/experiment/stellantis-community" ] || [ "${GITHUB_HEAD_REF}" = "experiment/stellantis-community" ]; then
+            CONFIG_URL="https://raw.githubusercontent.com/andreadegiovine/homeassistant-stellantis-vehicles/develop/custom_components/stellantis_vehicles/configs.json"
+            curl -fsSL "$CONFIG_URL" -o /tmp/stellantis-configs.json
+            CLIENT_ID="$(python3 -c 'import json; d=json.load(open("/tmp/stellantis-configs.json")); print(d["MyCitroen"]["configs"]["ES"]["client_id"])')"
+            CLIENT_SECRET="$(python3 -c 'import json; d=json.load(open("/tmp/stellantis-configs.json")); print(d["MyCitroen"]["configs"]["ES"]["client_secret"])')"
+            test -n "$CLIENT_ID" && test -n "$CLIENT_SECRET"
+            echo "::add-mask::$CLIENT_ID"
+            echo "::add-mask::$CLIENT_SECRET"
+            gradle testDebugUnitTest assembleDebug -PCITROEN_CLIENT_ID="$CLIENT_ID" -PCITROEN_CLIENT_SECRET="$CLIENT_SECRET"
+            unset CLIENT_ID CLIENT_SECRET
+            rm -f /tmp/stellantis-configs.json
+          else
+            gradle testDebugUnitTest assembleDebug
+          fi
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

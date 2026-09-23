@@ -9,3 +9,14 @@
 .cxx
 *.jks
 *.keystore
+
+# Connected Car backend secrets / mTLS material
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
