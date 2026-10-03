@@ -104,6 +104,29 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var otpResult by remember{mutableStateOf<OtpNetworkResult?>(null)}
  val otpNetwork=remember(context){StellantisOtpNetwork(context.applicationContext)}
  val oauthStore=remember(context){OAuthSecureStore(context.applicationContext)}
+ val clientCertManager=remember(context){StellantisClientCertificateManager(context.applicationContext)}
+ var certAlias by remember{mutableStateOf(clientCertManager.savedAlias())}
+ var certStatus by remember{mutableStateOf(if(certAlias.isNullOrBlank()) "Ausente" else "Comprobando…")}
+ var mtlsStatus by remember{mutableStateOf("Sin probar")}
+
+ LaunchedEffect(certAlias){
+  certStatus=clientCertManager.certificateStatus(certAlias)
+ }
+
+ suspend fun runConnectedCarDiagnostic(accessToken:String): StellantisDiagnosticState {
+  val selection=clientCertManager.buildSelectedClient()
+  mtlsStatus=selection.status
+  val host=if(selection.mtlsActive) {
+   StellantisClientCertificateManager.API_CERT_HOST
+  } else {
+   StellantisClientCertificateManager.API_PUBLIC_HOST
+  }
+  return SafeStellantisCommunityDiagnostic(
+   auth=StellantisRuntimeAuth(accessToken),
+   http=selection.client,
+   connectedCarHost=host
+  ).readStatus()
+ }
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
  val configured=clientId.isNotBlank() && clientSecret.isNotBlank()
@@ -159,7 +182,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    remoteRefreshPresent=false
    remoteProbe=null
    try{
-    SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+    runConnectedCarDiagnostic(tokens.accessToken)
    }catch(e:Exception){
     StellantisDiagnosticState(
      authentication=StellantisDiagnosticState.Check.OK,
@@ -194,7 +217,57 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    HorizontalDivider()
    Text("Connected Car · solo lectura",style=MaterialTheme.typography.titleMedium)
    Text("RemoteServices / SMS / OTP quedan fuera de esta prueba. Se mantienen OAuth y MAUV para investigar únicamente telemetría autorizada de lectura.",color=MaterialTheme.colorScheme.onSurfaceVariant)
-   Metric("Acceso Connected Car","Pendiente de credenciales autorizadas")
+   Metric("Certificado cliente mTLS",certStatus)
+   Metric("Estado mTLS",mtlsStatus)
+   Text("La clave privada permanece dentro de Android KeyChain. C3-Control no la exporta ni la guarda.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Button(
+    onClick={
+     val activity=context as? android.app.Activity
+     if(activity==null){
+      certStatus="No se pudo abrir el selector de certificados"
+     }else{
+      clientCertManager.chooseCertificate(activity){ selected ->
+       if(!selected.isNullOrBlank()){
+        certAlias=selected
+        certStatus="Seleccionado · comprobando…"
+        mtlsStatus="Pendiente de prueba"
+       }
+      }
+     }
+    },
+    modifier=Modifier.fillMaxWidth()
+   ){Text("Seleccionar certificado cliente")}
+   if(!certAlias.isNullOrBlank()){
+    OutlinedButton(
+     onClick={
+      clientCertManager.clearCertificate()
+      certAlias=null
+      certStatus="Ausente"
+      mtlsStatus="Sin probar"
+     },
+     modifier=Modifier.fillMaxWidth()
+    ){Text("Quitar certificado de C3-Control")}
+   }
+   Button(
+    enabled=!busy&&!remoteAccessToken.isNullOrBlank(),
+    onClick={
+     val token=remoteAccessToken ?: return@Button
+     scope.launch{
+      busy=true
+      state=try{runConnectedCarDiagnostic(token)}catch(e:Exception){
+       StellantisDiagnosticState(
+        authentication=StellantisDiagnosticState.Check.OK,
+        vehicleDiscovery=StellantisDiagnosticState.Check.PENDING,
+        vehicleStatus=StellantisDiagnosticState.Check.PENDING,
+        message="Prueba mTLS: "+(e.message?:e::class.java.simpleName)
+       )
+      }
+      busy=false
+     }
+    },
+    modifier=Modifier.fillMaxWidth()
+   ){Text(if(busy)"Probando…" else "Probar Connected Car ahora")}
+   Metric("Acceso Connected Car",if(certAlias.isNullOrBlank())"Pendiente de certificado autorizado" else "Certificado seleccionado · listo para probar")
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
    if(oauthError!=null) Text("OAuth: $oauthError",color=MaterialTheme.colorScheme.error)
@@ -235,7 +308,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
        remoteRefreshPresent=false
        remoteProbe=null
        try{
-        SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(tokens.accessToken)).readStatus()
+        runConnectedCarDiagnostic(tokens.accessToken)
        }catch(e:Exception){
         StellantisDiagnosticState(
          authentication=StellantisDiagnosticState.Check.OK,
