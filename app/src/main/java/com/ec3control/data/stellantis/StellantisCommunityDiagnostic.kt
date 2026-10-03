@@ -31,7 +31,8 @@ data class StellantisRuntimeAuth(
 
 class SafeStellantisCommunityDiagnostic(
     private val auth: StellantisRuntimeAuth? = null,
-    private val http: OkHttpClient = OkHttpClient()
+    private val http: OkHttpClient = OkHttpClient(),
+    private val connectedCarHost: String = StellantisClientCertificateManager.API_PUBLIC_HOST
 ) : StellantisCommunityDiagnostic {
 
     override suspend fun readStatus(): StellantisDiagnosticState = withContext(Dispatchers.IO) {
@@ -49,7 +50,7 @@ class SafeStellantisCommunityDiagnostic(
 
             val userRequestUrl = okhttp3.HttpUrl.Builder()
                 .scheme("https")
-                .host("api.groupe-psa.com")
+                .host(connectedCarHost)
                 .addPathSegments("connectedcar/v4/user")
                 .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
                 .build()
@@ -81,7 +82,7 @@ class SafeStellantisCommunityDiagnostic(
 
             val vehiclesRequestUrl = okhttp3.HttpUrl.Builder()
                 .scheme("https")
-                .host("api.groupe-psa.com")
+                .host(connectedCarHost)
                 .addPathSegments("connectedcar/v4/user/vehicles")
                 .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
                 .addQueryParameter("locale", "es-ES")
@@ -95,7 +96,7 @@ class SafeStellantisCommunityDiagnostic(
                     if (response.code == 404) {
                         val associationUrl = okhttp3.HttpUrl.Builder()
                             .scheme("https")
-                            .host("api.groupe-psa.com")
+                            .host(StellantisClientCertificateManager.API_PUBLIC_HOST)
                             .addPathSegments("applications/cvs/v4/mauv/car-associations")
                             .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
                             .addQueryParameter("locale", "es-ES")
@@ -116,7 +117,7 @@ class SafeStellantisCommunityDiagnostic(
                                     fun statusProbe(extraHeader: String? = null): Any {
                                         val probeUrl = okhttp3.HttpUrl.Builder()
                                             .scheme("https")
-                                            .host("api.groupe-psa.com")
+                                            .host(connectedCarHost)
                                             .addPathSegments("connectedcar/v4/user/vehicles")
                                             .addPathSegment(associatedVehicle)
                                             .addPathSegment("status")
@@ -142,7 +143,7 @@ class SafeStellantisCommunityDiagnostic(
                                         } else {
                                             val cleanStatusUrl = okhttp3.HttpUrl.Builder()
                                                 .scheme("https")
-                                                .host("api.groupe-psa.com")
+                                                .host(connectedCarHost)
                                                 .addPathSegments("connectedcar/v4/user/vehicles")
                                                 .addPathSegment(candidateVehicle)
                                                 .addPathSegment("status")
@@ -161,7 +162,7 @@ class SafeStellantisCommunityDiagnostic(
                                     fun vehicleReadOnlyProbe(resource: String): Int {
                                         val probeUrl = okhttp3.HttpUrl.Builder()
                                             .scheme("https")
-                                            .host("api.groupe-psa.com")
+                                            .host(connectedCarHost)
                                             .addPathSegments("connectedcar/v4/user/vehicles")
                                             .addPathSegment(associatedVehicle)
                                             .addPathSegment(resource)
@@ -179,7 +180,7 @@ class SafeStellantisCommunityDiagnostic(
                                     // Only expose the HTTP code, never coordinates or the response body.
                                     val lastPositionUrl = okhttp3.HttpUrl.Builder()
                                         .scheme("https")
-                                        .host("api.groupe-psa.com")
+                                        .host(connectedCarHost)
                                         .addPathSegments("connectedcar/v4/user/vehicles")
                                         .addPathSegment(associatedVehicle)
                                         .addPathSegment("lastPosition")
@@ -203,7 +204,7 @@ class SafeStellantisCommunityDiagnostic(
                                     // so inspect only safe response shape from the association family.
                                     val associationResourceUrl = okhttp3.HttpUrl.Builder()
                                         .scheme("https")
-                                        .host("api.groupe-psa.com")
+                                        .host(StellantisClientCertificateManager.API_PUBLIC_HOST)
                                         .addPathSegments("applications/cvs/v4/mauv/car-associations")
                                         .addPathSegment(associationId.orEmpty())
                                         .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
@@ -281,7 +282,7 @@ class SafeStellantisCommunityDiagnostic(
                                         } else {
                                             val rowUrl = okhttp3.HttpUrl.Builder()
                                                 .scheme("https")
-                                                .host("api.groupe-psa.com")
+                                                .host(StellantisClientCertificateManager.API_PUBLIC_HOST)
                                                 .addPathSegments("applications/cvs/v4/mauv/car-associations")
                                                 .addPathSegment(rowAssociationId)
                                                 .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
@@ -449,7 +450,7 @@ class SafeStellantisCommunityDiagnostic(
 
                 val statusUrl = okhttp3.HttpUrl.Builder()
                     .scheme("https")
-                    .host("api.groupe-psa.com")
+                    .host(connectedCarHost)
                     .addPathSegments("connectedcar/v4/user/vehicles/$id/status")
                     .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
                     .addQueryParameter("locale", "es-ES")
@@ -525,7 +526,7 @@ class SafeStellantisCommunityDiagnostic(
     ): StellantisDiagnosticState {
         val statusUrl = okhttp3.HttpUrl.Builder()
             .scheme("https")
-            .host("api.groupe-psa.com")
+            .host(connectedCarHost)
             .addPathSegments("connectedcar/v4/user/vehicles/$vehicleId/status")
             .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
             .addQueryParameter("locale", "es-ES")
