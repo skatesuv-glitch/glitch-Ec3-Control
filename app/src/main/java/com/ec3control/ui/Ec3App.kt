@@ -102,7 +102,10 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var localPinConfirm by remember{mutableStateOf("")}
  var otpBusy by remember{mutableStateOf(false)}
  var otpResult by remember{mutableStateOf<OtpNetworkResult?>(null)}
+ var microProbe by remember{mutableStateOf<MicroservicesProbeResult?>(null)}
+ var microBusy by remember{mutableStateOf(false)}
  val otpNetwork=remember(context){StellantisOtpNetwork(context.applicationContext)}
+ val officialMicroProbe=remember{OfficialAppMicroservicesProbe()}
  val oauthStore=remember(context){OAuthSecureStore(context.applicationContext)}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
  val clientSecret=BuildConfig.CITROEN_CLIENT_SECRET
@@ -179,7 +182,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Text("C3-Control · MAUV CHECKS · SOLO LECTURA",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Text("C3-Control · APP API + MAUV · SOLO LECTURA",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
@@ -235,6 +238,37 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
     },
     modifier=Modifier.fillMaxWidth()
    ){Text(if(busy)"Analizando…" else "Analizar asociaciones ahora")}
+   HorizontalDivider()
+   Text("API de la app oficial · solo lectura",style=MaterialTheme.typography.titleMedium)
+   Text("Prueba la familia microservices.mym.awsmpsa.com con el OAuth ya obtenido. No usa certificado externo, OTP ni órdenes al coche. Los tokens no se muestran.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   microProbe?.let{probe->
+    Metric("session/v2/accesstoken",probe.sessionV2)
+    Metric("session/v1/accesstoken",probe.sessionV1)
+    Metric("Sesión de app",if(probe.tokenObtained)"Obtenida en memoria ✓" else "No obtenida")
+    Metric("/me/v1/user",probe.user)
+    Metric("/me/v1/get_devices",probe.devices)
+    Text(probe.note,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   }
+   Button(
+    enabled=!microBusy&&!remoteAccessToken.isNullOrBlank(),
+    onClick={
+     val token=remoteAccessToken ?: return@Button
+     scope.launch{
+      microBusy=true
+      microProbe=try{
+       officialMicroProbe.probe(token)
+      }catch(e:Exception){
+       MicroservicesProbeResult(
+        sessionV2="Error",
+        sessionV1="Error",
+        note="Diagnóstico app API: "+(e.message?:e::class.java.simpleName)
+       )
+      }
+      microBusy=false
+     }
+    },
+    modifier=Modifier.fillMaxWidth()
+   ){Text(if(microBusy)"Probando API app…" else "Probar API de la app oficial")}
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
    if(oauthError!=null) Text("OAuth: $oauthError",color=MaterialTheme.colorScheme.error)
