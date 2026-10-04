@@ -2,7 +2,7 @@ name: Android Build
 
 on:
   push:
-    branches: [ main, experiment/stellantis-community, experiment/association-diagnostic ]
+    branches: [ main, experiment/stellantis-community, experiment/association-diagnostic, experiment/cvs-current-api ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -22,12 +22,17 @@ jobs:
       - name: Run tests and build debug APK
         shell: bash
         run: |
-          if [ "${GITHUB_REF}" = "refs/heads/experiment/stellantis-community" ] || [ "${GITHUB_HEAD_REF}" = "experiment/stellantis-community" ] || [ "${GITHUB_REF}" = "refs/heads/experiment/association-diagnostic" ] || [ "${GITHUB_HEAD_REF}" = "experiment/association-diagnostic" ]; then
+          if [ "${GITHUB_REF}" = "refs/heads/experiment/stellantis-community" ] || [ "${GITHUB_HEAD_REF}" = "experiment/stellantis-community" ] || [ "${GITHUB_REF}" = "refs/heads/experiment/association-diagnostic" ] || [ "${GITHUB_HEAD_REF}" = "experiment/association-diagnostic" ] || [ "${GITHUB_REF}" = "refs/heads/experiment/cvs-current-api" ] || [ "${GITHUB_HEAD_REF}" = "experiment/cvs-current-api" ]; then
             CONFIG_URL="https://raw.githubusercontent.com/andreadegiovine/homeassistant-stellantis-vehicles/develop/custom_components/stellantis_vehicles/configs.json"
             curl -fsSL "$CONFIG_URL" -o /tmp/stellantis-configs.json
             CLIENT_ID="$(python3 -c 'import json; d=json.load(open("/tmp/stellantis-configs.json")); print(d["MyCitroen"]["configs"]["ES"]["client_id"])')"
             CLIENT_SECRET="$(python3 -c 'import json; d=json.load(open("/tmp/stellantis-configs.json")); print(d["MyCitroen"]["configs"]["ES"]["client_secret"])')"
             test -n "$CLIENT_ID" && test -n "$CLIENT_SECRET"
+            if [ "${GITHUB_REF}" = "refs/heads/experiment/cvs-current-api" ] || [ "${GITHUB_HEAD_REF}" = "experiment/cvs-current-api" ]; then
+              mkdir -p app/src/main/res/raw
+              curl -fsSL "https://raw.githubusercontent.com/TA2k/ioBroker.psa/5678a9ba5c5f4f1af3d4955261cdbf04a6ff13fb/certs/mwp.dat" -o app/src/main/res/raw/mwp.dat
+              test -s app/src/main/res/raw/mwp.dat
+            fi
             echo "::add-mask::$CLIENT_ID"
             echo "::add-mask::$CLIENT_SECRET"
             gradle testDebugUnitTest assembleDebug -PCITROEN_CLIENT_ID="$CLIENT_ID" -PCITROEN_CLIENT_SECRET="$CLIENT_SECRET"
