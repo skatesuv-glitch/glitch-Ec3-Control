@@ -30,8 +30,14 @@ jobs:
             test -n "$CLIENT_ID" && test -n "$CLIENT_SECRET"
             if [ "${GITHUB_REF}" = "refs/heads/experiment/cvs-current-api" ] || [ "${GITHUB_HEAD_REF}" = "experiment/cvs-current-api" ]; then
               mkdir -p app/src/main/res/raw
-              curl -fsSL "https://raw.githubusercontent.com/TA2k/ioBroker.psa/5678a9ba5c5f4f1af3d4955261cdbf04a6ff13fb/certs/mwp.dat" -o app/src/main/res/raw/mwp.dat
+              curl -fsSL "https://raw.githubusercontent.com/flobz/psa_apk/main/mycitroen.apk.bz2" -o /tmp/mycitroen.apk.bz2
+              bunzip2 -f /tmp/mycitroen.apk.bz2
+              unzip -p /tmp/mycitroen.apk assets/MWPMYMA1.pfx > app/src/main/res/raw/mwp.dat
               test -s app/src/main/res/raw/mwp.dat
+              openssl pkcs12 -in app/src/main/res/raw/mwp.dat -clcerts -nokeys -passin pass:y5Y2my5B -out /tmp/mwp-cert.pem
+              echo "Transport certificate from current MyCitroen APK:"
+              openssl x509 -in /tmp/mwp-cert.pem -noout -subject -issuer -dates -fingerprint -sha256
+              rm -f /tmp/mwp-cert.pem /tmp/mycitroen.apk
             fi
             echo "::add-mask::$CLIENT_ID"
             echo "::add-mask::$CLIENT_SECRET"
