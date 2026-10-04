@@ -113,6 +113,15 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   certStatus=clientCertManager.certificateStatus(certAlias)
  }
 
+ suspend fun runPublicDiagnostic(accessToken:String): StellantisDiagnosticState {
+  return SafeStellantisCommunityDiagnostic(
+   auth=StellantisRuntimeAuth(accessToken),
+   http=okhttp3.OkHttpClient(),
+   connectedCarHost=StellantisClientCertificateManager.API_PUBLIC_HOST,
+   clientCertificateConfigured=false
+  ).readStatus()
+ }
+
  suspend fun runConnectedCarDiagnostic(accessToken:String): StellantisDiagnosticState {
   val selection=clientCertManager.buildSelectedClient()
   mtlsStatus=selection.status
@@ -124,7 +133,8 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   return SafeStellantisCommunityDiagnostic(
    auth=StellantisRuntimeAuth(accessToken),
    http=selection.client,
-   connectedCarHost=host
+   connectedCarHost=host,
+   clientCertificateConfigured=selection.mtlsActive
   ).readStatus()
  }
  val clientId=BuildConfig.CITROEN_CLIENT_ID
@@ -182,7 +192,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    remoteRefreshPresent=false
    remoteProbe=null
    try{
-    runConnectedCarDiagnostic(tokens.accessToken)
+    runPublicDiagnostic(tokens.accessToken)
    }catch(e:Exception){
     StellantisDiagnosticState(
      authentication=StellantisDiagnosticState.Check.OK,
@@ -308,7 +318,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
        remoteRefreshPresent=false
        remoteProbe=null
        try{
-        runConnectedCarDiagnostic(tokens.accessToken)
+        runPublicDiagnostic(tokens.accessToken)
        }catch(e:Exception){
         StellantisDiagnosticState(
          authentication=StellantisDiagnosticState.Check.OK,
