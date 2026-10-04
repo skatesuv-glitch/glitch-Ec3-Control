@@ -83,7 +83,22 @@ class StellantisClientCertificateManager(
                     val leaf = chain.first()
                     try {
                         leaf.checkValidity()
-                        "Presente ✓ · ${key.algorithm} · vigente"
+                        val eku = leaf.extendedKeyUsage
+                        val clientAuth = when {
+                            eku == null -> "EKU no declarado"
+                            eku.contains("1.3.6.1.5.5.7.3.2") -> "clientAuth ✓"
+                            else -> "clientAuth NO"
+                        }
+                        val issuer = Regex("(?:^|,)CN=([^,]+)")
+                            .find(leaf.issuerX500Principal.name)
+                            ?.groupValues?.getOrNull(1)
+                            ?.take(60)
+                            ?: "emisor sin CN"
+                        val digest = java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(leaf.encoded)
+                            .take(8)
+                            .joinToString("") { "%02X".format(it) }
+                        "Presente ✓ · ${key.algorithm} · vigente · $clientAuth · emisor=$issuer · huella=$digest"
                     } catch (_: Exception) {
                         "Presente · ${key.algorithm} · revisar vigencia"
                     }
