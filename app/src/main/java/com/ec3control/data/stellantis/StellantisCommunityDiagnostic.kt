@@ -32,7 +32,8 @@ data class StellantisRuntimeAuth(
 class SafeStellantisCommunityDiagnostic(
     private val auth: StellantisRuntimeAuth? = null,
     private val http: OkHttpClient = OkHttpClient(),
-    private val connectedCarHost: String = StellantisClientCertificateManager.API_PUBLIC_HOST
+    private val connectedCarHost: String = StellantisClientCertificateManager.API_PUBLIC_HOST,
+    private val clientCertificateConfigured: Boolean = false
 ) : StellantisCommunityDiagnostic {
 
     override suspend fun readStatus(): StellantisDiagnosticState = withContext(Dispatchers.IO) {
@@ -75,7 +76,15 @@ class SafeStellantisCommunityDiagnostic(
                     Request.Builder().url(apiCertUrl).apply(headers).get().build()
                 ).execute().use { "HTTP " + it.code }
             } catch (e: javax.net.ssl.SSLException) {
-                "TLS_CLIENT_CERT_REQUIRED"
+                if (clientCertificateConfigured) {
+                    if (e.message?.contains("ACCESS_DENIED", ignoreCase = true) == true) {
+                        "TLS_CLIENT_CERT_REJECTED_ACCESS_DENIED"
+                    } else {
+                        "TLS_CLIENT_CERT_REJECTED"
+                    }
+                } else {
+                    "TLS_CLIENT_CERT_REQUIRED"
+                }
             } catch (e: Exception) {
                 "NETWORK_" + e::class.java.simpleName
             }
@@ -509,6 +518,22 @@ class SafeStellantisCommunityDiagnostic(
                     )
                 }
             }
+        } catch (e: javax.net.ssl.SSLException) {
+            val tls = if (e.message?.contains("ACCESS_DENIED", ignoreCase = true) == true) {
+                "TLSV1_ALERT_ACCESS_DENIED"
+            } else {
+                e::class.java.simpleName
+            }
+            StellantisDiagnosticState(
+                authentication = StellantisDiagnosticState.Check.OK,
+                vehicleDiscovery = StellantisDiagnosticState.Check.PENDING,
+                vehicleStatus = StellantisDiagnosticState.Check.PENDING,
+                message = if (clientCertificateConfigured) {
+                    "OAuth válido. Certificado cliente presentado, pero el gateway mTLS lo rechazó: " + tls
+                } else {
+                    "OAuth válido. El endpoint requiere certificado cliente mTLS: " + tls
+                }
+            )
         } catch (e: Exception) {
             StellantisDiagnosticState(
                 authentication = StellantisDiagnosticState.Check.ERROR,
