@@ -2,7 +2,7 @@ name: Android Build
 
 on:
   push:
-    branches: [ main, experiment/stellantis-community, experiment/association-diagnostic, experiment/cvs-current-api ]
+    branches: [ main, experiment/stellantis-community, experiment/association-diagnostic, experiment/cvs-current-api, experiment/cvs-fresh-apk-cert ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -22,13 +22,13 @@ jobs:
       - name: Run tests and build debug APK
         shell: bash
         run: |
-          if [ "${GITHUB_REF}" = "refs/heads/experiment/stellantis-community" ] || [ "${GITHUB_HEAD_REF}" = "experiment/stellantis-community" ] || [ "${GITHUB_REF}" = "refs/heads/experiment/association-diagnostic" ] || [ "${GITHUB_HEAD_REF}" = "experiment/association-diagnostic" ] || [ "${GITHUB_REF}" = "refs/heads/experiment/cvs-current-api" ] || [ "${GITHUB_HEAD_REF}" = "experiment/cvs-current-api" ]; then
+          if [ "${GITHUB_REF}" = "refs/heads/experiment/stellantis-community" ] || [ "${GITHUB_HEAD_REF}" = "experiment/stellantis-community" ] || [ "${GITHUB_REF}" = "refs/heads/experiment/association-diagnostic" ] || [ "${GITHUB_HEAD_REF}" = "experiment/association-diagnostic" ] || [ "${GITHUB_REF}" = "refs/heads/experiment/cvs-current-api" ] || [ "${GITHUB_HEAD_REF}" = "experiment/cvs-current-api" ] || [ "${GITHUB_REF}" = "refs/heads/experiment/cvs-fresh-apk-cert" ] || [ "${GITHUB_HEAD_REF}" = "experiment/cvs-fresh-apk-cert" ]; then
             CONFIG_URL="https://raw.githubusercontent.com/andreadegiovine/homeassistant-stellantis-vehicles/develop/custom_components/stellantis_vehicles/configs.json"
             curl -fsSL "$CONFIG_URL" -o /tmp/stellantis-configs.json
             CLIENT_ID="$(python3 -c 'import json; d=json.load(open("/tmp/stellantis-configs.json")); print(d["MyCitroen"]["configs"]["ES"]["client_id"])')"
             CLIENT_SECRET="$(python3 -c 'import json; d=json.load(open("/tmp/stellantis-configs.json")); print(d["MyCitroen"]["configs"]["ES"]["client_secret"])')"
             test -n "$CLIENT_ID" && test -n "$CLIENT_SECRET"
-            if [ "${GITHUB_REF}" = "refs/heads/experiment/cvs-current-api" ] || [ "${GITHUB_HEAD_REF}" = "experiment/cvs-current-api" ]; then
+            if [ "${GITHUB_REF}" = "refs/heads/experiment/cvs-current-api" ] || [ "${GITHUB_HEAD_REF}" = "experiment/cvs-current-api" ] || [ "${GITHUB_REF}" = "refs/heads/experiment/cvs-fresh-apk-cert" ] || [ "${GITHUB_HEAD_REF}" = "experiment/cvs-fresh-apk-cert" ]; then
               mkdir -p app/src/main/res/raw
               curl -fsSL "https://raw.githubusercontent.com/flobz/psa_apk/main/mycitroen.apk.bz2" -o /tmp/mycitroen.apk.bz2
               bunzip2 -f /tmp/mycitroen.apk.bz2
