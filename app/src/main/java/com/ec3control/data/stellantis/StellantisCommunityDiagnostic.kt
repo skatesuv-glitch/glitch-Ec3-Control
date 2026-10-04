@@ -6,6 +6,17 @@ import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
+data class AssociationDiagnosticSummary(
+    val number: Int,
+    val status: String,
+    val services: String,
+    val requiredChecks: String,
+    val validatedChecks: String,
+    val checkCounts: String,
+    val hlaStatus: String,
+    val odometerStatus: String
+)
+
 data class StellantisDiagnosticState(
     val authentication: Check = Check.PENDING,
     val vehicleDiscovery: Check = Check.PENDING,
@@ -14,6 +25,8 @@ data class StellantisDiagnosticState(
     val rangeKm: Int? = null,
     val charging: Boolean? = null,
     val vehicleId: String? = null,
+    val legacyVehicleDiscovery: String? = null,
+    val associationSummaries: List<AssociationDiagnosticSummary> = emptyList(),
     val message: String = "Experimental connector not authenticated"
 ) {
     enum class Check { PENDING, OK, ERROR }
@@ -60,24 +73,9 @@ class SafeStellantisCommunityDiagnostic(
                 Pair(probe.code, safeErrorDetail(raw))
             }
 
-            // Official B2C v4 endpoint probe. Stellantis documents this host as mTLS-only.
-            // We intentionally provide NO client certificate here. The result safely tells us
-            // whether the TLS gateway rejects a normal MyCitroen OAuth session before HTTP.
-            val apiCertProbe = try {
-                val apiCertUrl = okhttp3.HttpUrl.Builder()
-                    .scheme("https")
-                    .host("api-cert.groupe-psa.com")
-                    .addPathSegments("connectedcar/v4/user")
-                    .addQueryParameter("client_id", com.ec3control.BuildConfig.CITROEN_CLIENT_ID)
-                    .build()
-                http.newCall(
-                    Request.Builder().url(apiCertUrl).apply(headers).get().build()
-                ).execute().use { "HTTP " + it.code }
-            } catch (e: javax.net.ssl.SSLException) {
-                "TLS_CLIENT_CERT_REQUIRED"
-            } catch (e: Exception) {
-                "NETWORK_" + e::class.java.simpleName
-            }
+            // mTLS/api-cert is intentionally outside this diagnostic.
+            // This branch only studies the working OAuth + MAUV account association path.
+            val apiCertProbe = "OMITIDO"
 
             val vehiclesRequestUrl = okhttp3.HttpUrl.Builder()
                 .scheme("https")
@@ -107,6 +105,77 @@ class SafeStellantisCommunityDiagnostic(
                             val associationRaw = associationResponse.body?.string().orEmpty()
                             if (associationResponse.isSuccessful) {
                                 val associations = Json.parseToJsonElement(associationRaw).jsonArray
+
+                                fun safePrimitive(element: JsonElement?): String {
+                                    val p = element as? JsonPrimitive ?: return if (element == null || element is JsonNull) "ausente" else "presente"
+                                    val value = p.contentOrNull?.trim().orEmpty()
+                                    if (value.isBlank() || value.equals("null", true)) return "null"
+                                    if (value.contains("@")) return "dato oculto"
+                                    if (value.length == 17 && value.all { it.isLetterOrDigit() }) return "VIN17 oculto"
+                                    return value.replace(Regex("[A-HJ-NPR-Z0-9]{17}"), "VIN17 oculto").take(80)
+                                }
+
+                                fun safeArrayDetail(row: JsonObject, key: String): String {
+                                    val value = row[key] ?: return "ausente"
+                                    val array = value as? JsonArray ?: return safePrimitive(value)
+                                    if (array.isEmpty()) return "vacío"
+                                    return array.mapIndexed { itemIndex, item ->
+                                        when (item) {
+                                            is JsonPrimitive -> safePrimitive(item)
+                                            is JsonObject -> {
+                                                val labels = listOf("code", "name", "type", "status", "service", "check", "key")
+                                                    .mapNotNull { label ->
+                                                        item[label]?.let { v -> safePrimitive(v).takeIf { it != "ausente" && it != "null" }?.let { label + "=" + it } }
+                                                    }
+                                                if (labels.isNotEmpty()) labels.joinToString(",")
+                                                else "objeto(" + item.keys.sorted().joinToString(",") + ")"
+                                            }
+                                            is JsonArray -> "array(" + item.size + ")"
+                                            else -> "item" + (itemIndex + 1)
+                                        }
+                                    }.joinToString(" | ").take(500)
+                                }
+
+                                val summaries = associations.mapIndexed { index, element ->
+                                    val row = element.jsonObject
+                                    val requiredCount = (row["required_checks"] as? JsonArray)?.size
+                                    val validatedCount = (row["validated_checks"] as? JsonArray)?.size
+                                    AssociationDiagnosticSummary(
+                                        number = index + 1,
+                                        status = safePrimitive(row["car_association_status"]),
+                                        services = safeArrayDetail(row, "services"),
+                                        requiredChecks = safeArrayDetail(row, "required_checks"),
+                                        validatedChecks = safeArrayDetail(row, "validated_checks"),
+                                        checkCounts = when {
+                                            requiredCount == null && validatedCount == null -> "sin arrays de checks"
+                                            else -> (validatedCount ?: 0).toString() + "/" + (requiredCount ?: 0).toString() + " validados/requeridos"
+                                        },
+                                        hlaStatus = safePrimitive(row["hla_status"]),
+                                        odometerStatus = safePrimitive(row["odometer_data_status"])
+                                    )
+                                }
+
+                                val legacyDetail = safeErrorDetail(response.peekBody(8192).string())
+                                return@withContext StellantisDiagnosticState(
+                                    authentication = StellantisDiagnosticState.Check.OK,
+                                    vehicleDiscovery = if (associations.isNotEmpty()) StellantisDiagnosticState.Check.OK else StellantisDiagnosticState.Check.PENDING,
+                                    vehicleStatus = StellantisDiagnosticState.Check.PENDING,
+                                    legacyVehicleDiscovery = buildString {
+                                        append("HTTP ")
+                                        append(response.code)
+                                        if (!legacyDetail.isNullOrBlank()) {
+                                            append(" · ")
+                                            append(legacyDetail)
+                                        }
+                                    },
+                                    associationSummaries = summaries,
+                                    message = if (summaries.isEmpty()) {
+                                        "OAuth OK. MAUV respondió 200 pero no devolvió asociaciones."
+                                    } else {
+                                        "OAuth OK y MAUV OK. Se muestran únicamente estado, servicios y checks de asociación; VIN, IDs y datos personales permanecen ocultos."
+                                    }
+                                )
+
                                 val association = associations.firstOrNull()?.jsonObject
                                 val associatedVehicle = association
                                     ?.get("vehicle")?.jsonPrimitive?.contentOrNull
