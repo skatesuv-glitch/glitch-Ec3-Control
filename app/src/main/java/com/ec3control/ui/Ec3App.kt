@@ -102,6 +102,8 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
  var localPinConfirm by remember{mutableStateOf("")}
  var otpBusy by remember{mutableStateOf(false)}
  var otpResult by remember{mutableStateOf<OtpNetworkResult?>(null)}
+ var currentApiProbe by remember{mutableStateOf<CurrentApiProbeResult?>(null)}
+ var currentApiBusy by remember{mutableStateOf(false)}
  val otpNetwork=remember(context){StellantisOtpNetwork(context.applicationContext)}
  val oauthStore=remember(context){OAuthSecureStore(context.applicationContext)}
  val clientId=BuildConfig.CITROEN_CLIENT_ID
@@ -179,7 +181,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Text("C3-Control · MAUV CHECKS · SOLO LECTURA",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Text("C3-Control · CVS / MyM ACTUAL · SOLO LECTURA",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
@@ -235,6 +237,33 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
     },
     modifier=Modifier.fillMaxWidth()
    ){Text(if(busy)"Analizando…" else "Analizar asociaciones ahora")}
+   HorizontalDivider()
+   Text("API actual MyCitroën · CVS / MyM",style=MaterialTheme.typography.titleMedium)
+   Text("Prueba únicamente lectura contra la familia microservices.mym.awsmpsa.com. No se envían órdenes al coche ni se muestran tokens, VIN o identificadores.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   currentApiProbe?.let{probe->
+    Metric("Transporte app",probe.transportCertificate)
+    Metric("session/v2/accesstoken",probe.sessionExchange)
+    Metric("/me/v1/user",probe.currentUser)
+    Metric("/me/v1/get_devices",probe.devices)
+    Metric("/car/v1/vehicle/[VIN oculto]",probe.vehicle)
+    Text(probe.message,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   } ?: Metric("API actual","Pendiente de prueba")
+   Button(
+    enabled=!currentApiBusy&&!remoteAccessToken.isNullOrBlank(),
+    onClick={
+     val token=remoteAccessToken ?: return@Button
+     scope.launch{
+      currentApiBusy=true
+      currentApiProbe=try{
+       StellantisCurrentApiProbe(context.applicationContext,token).run()
+      }catch(e:Exception){
+       CurrentApiProbeResult(message="Prueba CVS: "+(e.message?:e::class.java.simpleName))
+      }
+      currentApiBusy=false
+     }
+    },
+    modifier=Modifier.fillMaxWidth()
+   ){Text(if(currentApiBusy)"Probando API actual…" else "Probar API actual MyCitroën")}
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
    if(oauthError!=null) Text("OAuth: $oauthError",color=MaterialTheme.colorScheme.error)
