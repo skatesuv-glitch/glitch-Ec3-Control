@@ -179,7 +179,7 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
   Text("Prueba Stellantis",style=MaterialTheme.typography.headlineMedium)
   Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("MyCitroën · solo lectura",style=MaterialTheme.typography.titleLarge)
-   Text("C3-Control · ASSOCIATION-ID PROBE · 97F865E",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
+   Text("C3-Control · MAUV CHECKS · SOLO LECTURA",color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelLarge)
    Metric("OAuth",when(state.authentication){StellantisDiagnosticState.Check.OK->"OK ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Vehículo",when(state.vehicleDiscovery){StellantisDiagnosticState.Check.OK->"Encontrado ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
    Metric("Estado / batería",when(state.vehicleStatus){StellantisDiagnosticState.Check.OK->"Recibido ✓";StellantisDiagnosticState.Check.ERROR->"Error";else->"Pendiente"})
@@ -192,9 +192,49 @@ private enum class Tab(val label:String){HOME("Inicio"),BATTERY("Batería"),CHAR
    Metric("RemoteServices","Probe activo deshabilitado")
    remoteProbe?.let{ Text(it.message,color=MaterialTheme.colorScheme.onSurfaceVariant) }
    HorizontalDivider()
-   Text("Connected Car · solo lectura",style=MaterialTheme.typography.titleMedium)
-   Text("RemoteServices / SMS / OTP quedan fuera de esta prueba. Se mantienen OAuth y MAUV para investigar únicamente telemetría autorizada de lectura.",color=MaterialTheme.colorScheme.onSurfaceVariant)
-   Metric("Acceso Connected Car","Pendiente de credenciales autorizadas")
+   Text("Asociación MAUV · solo lectura",style=MaterialTheme.typography.titleMedium)
+   Text("Esta prueba no usa certificado mTLS, OTP, SMS ni RemoteServices. Solo revisa OAuth, la ruta legacy de vehículos y el estado de las asociaciones MAUV.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   state.legacyVehicleDiscovery?.let{Metric("Descubrimiento legacy /user/vehicles",it)}
+   if(state.associationSummaries.isEmpty()){
+    Metric("Asociaciones MAUV","Pendiente")
+   }else{
+    Metric("Asociaciones MAUV",state.associationSummaries.size.toString()+" encontrada(s) ✓")
+    state.associationSummaries.forEach{assoc->
+     Card(Modifier.fillMaxWidth()){
+      Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+       Text("Asociación "+assoc.number,style=MaterialTheme.typography.titleMedium)
+       Metric("car_association_status",assoc.status)
+       Metric("Servicios",assoc.services)
+       Metric("required_checks",assoc.requiredChecks)
+       Metric("validated_checks",assoc.validatedChecks)
+       Metric("Balance checks",assoc.checkCounts)
+       Metric("hla_status",assoc.hlaStatus)
+       Metric("odometer_data_status",assoc.odometerStatus)
+      }
+     }
+    }
+   }
+   Button(
+    enabled=!busy&&!remoteAccessToken.isNullOrBlank(),
+    onClick={
+     val token=remoteAccessToken ?: return@Button
+     scope.launch{
+      busy=true
+      state=try{
+       SafeStellantisCommunityDiagnostic(StellantisRuntimeAuth(token)).readStatus()
+      }catch(e:Exception){
+       StellantisDiagnosticState(
+        authentication=StellantisDiagnosticState.Check.OK,
+        vehicleDiscovery=StellantisDiagnosticState.Check.PENDING,
+        vehicleStatus=StellantisDiagnosticState.Check.PENDING,
+        message="Diagnóstico MAUV: "+(e.message?:e::class.java.simpleName)
+       )
+      }
+      busy=false
+     }
+    },
+    modifier=Modifier.fillMaxWidth()
+   ){Text(if(busy)"Analizando…" else "Analizar asociaciones ahora")}
    state.batteryPercent?.let{Metric("Batería real","$it %")}
    state.rangeKm?.let{Metric("Autonomía","$it km")}
    if(oauthError!=null) Text("OAuth: $oauthError",color=MaterialTheme.colorScheme.error)
